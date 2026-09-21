@@ -156,8 +156,8 @@ semantics documented in #65, and the homonym-routing behavior tracked in #34.
 | `genexus_db` | active | Database umbrella: `DbDrift`, `DbOptimize`, `Analyze -> GetSQL / GetSqlForNavigation / GenerateSampleData`, typed Transaction records (`QueryRecords / InsertRecord / UpdateRecord`), `Types`, `ReorgImpact` |
 | `genexus_layout` | active | WebForm control tree, layout properties, printblock management |
 | `genexus_edit_form` | active | Semantic WebForm element manipulation |
-| `genexus_apply_pattern` | active | Pattern application and WorkWithPlus action-group/form-action configuration |
-| `genexus_wwp` | active | Typed WorkWithPlus grid/form actions, tabs, nested controls, native table-type changes, grid attributes, and native WebComponent-to-DropDownComponent replacement with preview, concurrency checks, verification, and rollback |
+| `genexus_apply_pattern` | active | Pattern application for any installed pattern (registry discovered from `Packages\Patterns`), diagnose and reapply without a WorkWithPlus fallback, and WorkWithPlus action-group/form-action configuration |
+| `genexus_wwp` | active | Typed WorkWithPlus grid/form actions, tabs, nested controls, native table-type changes, grid attributes, and native WebComponent-to-DropDownComponent replacement with preview, concurrency checks, verification, and rollback; an existing object without a WorkWithPlus instance returns `WWPInstanceNotFound` with `detectedPatterns` |
 | `genexus_security` | active | `Security -> audit_gam | scan_secrets | scan_native` (native SDK scanner) |
 | `genexus_kb` | active | Multi-KB pool management, startup object, and environment switching |
 | `genexus_kb_version` | active | SDK `KBVersionHelper` model version tree and branch management; `changed_objects` provides a read-only Design-vs-frozen NEW/CHANGED inventory or stable `ChangedObjectsNotSupported` when the SDK surface is unavailable |

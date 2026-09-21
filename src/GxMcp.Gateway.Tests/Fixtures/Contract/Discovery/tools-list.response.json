@@ -366,7 +366,7 @@
             "type": "string"
           },
           "pattern": {
-            "description": "Pattern key ('WorkWithPlus') or GUID.",
+            "description": "Installed pattern name (e.g. WorkWithPlus, K2BEntityServices) or GUID.",
             "type": "string"
           },
           "position": {
