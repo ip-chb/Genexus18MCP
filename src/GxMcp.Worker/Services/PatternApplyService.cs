@@ -169,7 +169,7 @@ namespace GxMcp.Worker.Services
                     string reject = TryBuildTypeGateRejection(obj.Name, gateKey, parentType, callerTemplate, availableTemplates);
                     if (reject != null) return reject;
                 }
-                else
+                else if (GetOwnedPatternInstance(obj, pattern) == null)
                 {
                     string reject = TryBuildManifestTypeGateRejection(obj.Name, patternKey, pattern, obj.TypeDescriptor?.Name ?? "");
                     if (reject != null) return reject;
@@ -285,6 +285,15 @@ namespace GxMcp.Worker.Services
         // Patterns with an instance on the parent: registered-instance children plus the
         // engine's PatternInstance.Get(parent, id) for every registered (and requested)
         // pattern. The first instance object seen per pattern is recorded in `instances`.
+        // Existing instance of the pattern on obj, ignoring an instance the SDK matched by name
+        // that belongs to another object (WorkWithPlus keeps its historical lookup).
+        private object GetOwnedPatternInstance(KBObject obj, PatternManifest pattern)
+        {
+            object instance = null;
+            try { instance = _engine.GetPatternInstance(obj, pattern.Id); } catch { }
+            return pattern.IsWorkWithPlus || PatternAnalysisService.InstanceBelongsTo(instance, obj) ? instance : null;
+        }
+
         private List<PatternManifest> FindExistingPatterns(KBObject parent, PatternManifest requested, Dictionary<Guid, object> instances)
         {
             var found = new List<PatternManifest>();
@@ -306,7 +315,11 @@ namespace GxMcp.Worker.Services
             if (requested != null && !probe.Any(p => p.Id == requested.Id)) probe.Add(requested);
             foreach (var m in probe)
             {
-                try { Add(m, _engine.GetPatternInstance(parent, m.Id)); }
+                try
+                {
+                    object instance = _engine.GetPatternInstance(parent, m.Id);
+                    if (m.IsWorkWithPlus || PatternAnalysisService.InstanceBelongsTo(instance, parent)) Add(m, instance);
+                }
                 catch (Exception ex) { Logger.Debug("Reapply: GetPatternInstance(" + m.Name + ") failed (best-effort): " + ex.Message); }
             }
             return found;
@@ -1174,7 +1187,11 @@ namespace GxMcp.Worker.Services
                 return PatternUnavailable(key, pattern.Name + " pattern not loaded - check license / package install");
 
             object existingInstance = null;
-            try { existingInstance = _engine.GetPatternInstance(obj, pattern.Id); }
+            try
+            {
+                existingInstance = _engine.GetPatternInstance(obj, pattern.Id);
+                if (!PatternAnalysisService.InstanceBelongsTo(existingInstance, obj)) existingInstance = null;
+            }
             catch (Exception ex) { Logger.Debug("ApplyPattern: GetPatternInstance(" + pattern.Name + ") failed (best-effort): " + ex.Message); }
             if (existingInstance == null) existingInstance = knownInstance;
 
@@ -2741,7 +2758,9 @@ namespace GxMcp.Worker.Services
                 string typeGateReject = isWwp
                     ? TryBuildTypeGateRejection(objectName, IsWwpKey(patternKey) ? patternKey : "WorkWithPlus", parentType, callerTemplate, availableTemplates)
                     : null;
-                if (!isWwp)
+                // The manifest's ParentObjects gate a first apply only: an existing instance is
+                // regenerated through the reapply route whatever its parent type.
+                if (!isWwp && GetOwnedPatternInstance(obj, pattern) == null)
                 {
                     string manifestReject = TryBuildManifestTypeGateRejection(objectName, patternKey, pattern, parentType);
                     if (manifestReject != null)
@@ -2767,8 +2786,7 @@ namespace GxMcp.Worker.Services
                 }
 
                 // ── 6. Override / existing instance conflict ─────────────────────
-                object existingInstance = null;
-                try { existingInstance = _engine.GetPatternInstance(obj, patternId); } catch { }
+                object existingInstance = GetOwnedPatternInstance(obj, pattern);
                 if (existingInstance != null)
                 {
                     findings.Add(isWwp

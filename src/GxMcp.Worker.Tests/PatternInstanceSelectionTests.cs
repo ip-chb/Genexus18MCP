@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using GxMcp.Worker.Services;
 using Xunit;
@@ -180,6 +180,17 @@ namespace GxMcp.Worker.Tests
 
             Assert.Equal(PatternInstanceSelectionStatus.Selected, sel.Status);
             Assert.Equal("WorkWithPlusCustomer", sel.Selected.Candidate.Name);
+        }
+        [Fact]
+        public void OwnerMatches_RejectsInstanceOwnedByAnotherObject()
+        {
+            var owner = Guid.NewGuid();
+            // A DataView homonym of the Transaction must not claim the Transaction's instance.
+            Assert.False(PatternAnalysisService.OwnerMatches(Guid.NewGuid(), owner));
+            Assert.True(PatternAnalysisService.OwnerMatches(owner, owner));
+            // Unknown ownership stays accepted.
+            Assert.True(PatternAnalysisService.OwnerMatches(null, owner));
+            Assert.True(PatternAnalysisService.OwnerMatches(Guid.Empty, owner));
         }
     }
 }

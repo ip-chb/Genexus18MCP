@@ -379,6 +379,22 @@ namespace GxMcp.Worker.Services
         }
 
         /// <summary>
+        /// False when the instance is known to belong to another object. The SDK's
+        /// <c>PatternInstance.Get(parent, id)</c> and template-name lookups match by name, so on a
+        /// KB where a DataView and a Transaction share a name the DataView would otherwise report
+        /// the Transaction's instance. Unknown ownership is accepted.
+        /// </summary>
+        internal static bool InstanceBelongsTo(object instance, KBObject owner)
+        {
+            if (instance == null) return false;
+            if (owner == null || !(instance is KBObject instanceObj)) return true;
+            return OwnerMatches(ResolveInstanceParent(instanceObj)?.Guid, owner.Guid);
+        }
+
+        internal static bool OwnerMatches(Guid? instanceOwner, Guid owner) =>
+            !instanceOwner.HasValue || instanceOwner.Value == Guid.Empty || owner == Guid.Empty || instanceOwner.Value == owner;
+
+        /// <summary>
         /// Object a pattern instance belongs to. The SDK's PatternInstance exposes it as the
         /// <c>KBObject</c> property; <see cref="KBObject.Parent"/> is the fallback because
         /// instances are children of their parent object. Folders and modules are not parents.
@@ -468,7 +484,7 @@ namespace GxMcp.Worker.Services
                 var named = fresh
                     ? _objectService.FindObjectFresh(namedInstance, namedPattern.Name)
                     : _objectService.FindObject(namedInstance, namedPattern.Name);
-                if (named != null)
+                if (named != null && (namedPattern.IsWorkWithPlus || InstanceBelongsTo(named, obj)))
                 {
                     selection = SelectPatternInstance(requested, new[] { ToCandidate(named) }, patternId, registry);
                     if (selection.Status == PatternInstanceSelectionStatus.Selected) return named;
