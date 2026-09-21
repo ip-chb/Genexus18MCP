@@ -29,7 +29,7 @@ namespace GxMcp.Worker.Services
     {
         // Well-known pattern GUIDs. WorkWithPlus is the only one in scope for W2;
         // additional pattern keys can be registered here as we expose more tools.
-        public static readonly Guid WorkWithPlusPatternId = new Guid("07135890-56fc-489b-b408-063722fa9f7d");
+        public static readonly Guid WorkWithPlusPatternId = PatternRegistry.WorkWithPlusPatternId;
 
         private static readonly Dictionary<string, Guid> KnownPatterns = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase)
         {
@@ -1104,28 +1104,8 @@ namespace GxMcp.Worker.Services
             }
         }
 
-        private static string ResolveGeneXusInstallationPath()
-        {
-            foreach (var candidate in new[]
-            {
-                Environment.GetEnvironmentVariable("GX_PROGRAM_DIR"),
-                Environment.GetEnvironmentVariable("GX_PATH")
-            })
-            {
-                if (!string.IsNullOrWhiteSpace(candidate) && Directory.Exists(candidate))
-                    return Path.GetFullPath(candidate);
-            }
+        private static string ResolveGeneXusInstallationPath() => GeneXusInstallPath.Resolve();
 
-            try
-            {
-                var sdkAssembly = AppDomain.CurrentDomain.GetAssemblies()
-                    .FirstOrDefault(a => string.Equals(a.GetName().Name, "Artech.Architecture.Common", StringComparison.OrdinalIgnoreCase));
-                if (sdkAssembly != null && !string.IsNullOrWhiteSpace(sdkAssembly.Location))
-                    return Path.GetDirectoryName(sdkAssembly.Location);
-            }
-            catch { }
-            return null;
-        }
 
         private static string ProbeWriteAccess(string path)
         {
