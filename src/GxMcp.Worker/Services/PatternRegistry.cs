@@ -213,7 +213,12 @@ namespace GxMcp.Worker.Services
                 if (byId != null) return byId;
             }
             if (string.IsNullOrWhiteSpace(typeName)) return null;
-            return _patterns.FirstOrDefault(p => string.Equals(p.Name, typeName, StringComparison.OrdinalIgnoreCase));
+            var byName = _patterns.FirstOrDefault(p => string.Equals(p.Name, typeName, StringComparison.OrdinalIgnoreCase));
+            // A known type GUID that differs from the pattern Id means a native type that
+            // only shares the pattern's name (e.g. a Dashboard object vs the Dashboard
+            // pattern). WorkWithPlus keeps its historical name-based match.
+            if (byName != null && typeGuid != Guid.Empty && !byName.IsWorkWithPlus) return null;
+            return byName;
         }
 
         public JArray ToJson() => new JArray(_patterns.Select(p => p.ToJson()));

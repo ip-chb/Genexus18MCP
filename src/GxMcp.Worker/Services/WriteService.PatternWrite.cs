@@ -14,14 +14,26 @@ namespace GxMcp.Worker.Services
         private string WritePatternPart(global::Artech.Architecture.Common.Objects.KBObject obj, string target, string partName, string xml, bool dryRun = false, bool strictVerify = true)
         {
             string currentXml;
+            global::Artech.Architecture.Common.Objects.KBObject currentInstance;
+            JObject resolutionDiagnostic;
             try
             {
-                currentXml = _patternAnalysisService.ReadPatternPartXml(obj, partName, out _, out _);
+                currentXml = _patternAnalysisService.ReadPatternPartXml(obj, partName, null, out currentInstance, out _, out resolutionDiagnostic);
             }
             catch (Exception ex)
             {
                 return CreateWriteError("Pattern precheck failed", target, partName, ex.Message, obj, code: "PatternReadFailed");
             }
+
+            // Issue #260: several pattern instances (e.g. K2BEntityServices + K2BPrompt) share the
+            // parent; refuse to guess which one to write.
+            if (resolutionDiagnostic != null)
+                return CreatePatternResolutionError(target, partName, resolutionDiagnostic, obj);
+
+            // Pin the envelope build and verification reads to the pattern resolved here.
+            var currentPattern = _patternAnalysisService.MatchInstancePattern(currentInstance);
+            Guid? resolvedPatternId = currentPattern?.Id;
+            string patternLabel = currentPattern?.Name ?? "pattern";
 
             string normalizedInput;
             if (string.Equals(partName, "PatternInstance", StringComparison.OrdinalIgnoreCase))
@@ -46,7 +58,9 @@ namespace GxMcp.Worker.Services
                         ["verified"] = new JArray("xmlParse", "metadataPreserved", "structurePreserved", "diffVsCurrent"),
                         ["changes"] = plan.Changes,
                         ["savePathExercised"] = false,
-                        ["warning"] = "WorkWithPlus pattern saves can still be rejected by the WWP validator on save. This preview does not certify save isolation."
+                        ["warning"] = currentPattern == null || currentPattern.IsWorkWithPlus
+                            ? "WorkWithPlus pattern saves can still be rejected by the WWP validator on save. This preview does not certify save isolation."
+                            : currentPattern.Name + " pattern saves can still be rejected by the pattern's validator on save. This preview does not certify save isolation."
                     });
                 normalizedInput = plan.Xml;
             }
@@ -75,7 +89,7 @@ namespace GxMcp.Worker.Services
 
             try
             {
-                var preXml = _patternAnalysisService.ReadPatternPartXml(obj, partName, out _, out _);
+                var preXml = _patternAnalysisService.ReadPatternPartXml(obj, partName, resolvedPatternId, out _, out _);
                 if (!string.IsNullOrWhiteSpace(preXml))
                 {
                     var snap = PatternSnapshotStore.SaveSnapshot(obj.Guid.ToString(), partName, preXml);
@@ -84,14 +98,16 @@ namespace GxMcp.Worker.Services
             }
             catch (Exception ex) { Logger.Debug("[PatternSnapshot] skipped: " + ex.Message); }
 
-            var envelope = _patternAnalysisService.BuildPatternPartEnvelope(obj, partName, normalizedInput, out var resolvedObject, out var resolvedPart);
+            var envelope = _patternAnalysisService.BuildPatternPartEnvelope(obj, partName, normalizedInput, resolvedPatternId, out var resolvedObject, out var resolvedPart, out var envelopeDiagnostic);
+            if (envelopeDiagnostic != null)
+                return CreatePatternResolutionError(target, partName, envelopeDiagnostic, obj);
             if (resolvedObject == null || resolvedPart == null || string.IsNullOrWhiteSpace(envelope))
             {
                 return CreateWriteError(
                     "Pattern part not found",
                     target,
                     partName,
-                    "The authoritative WorkWithPlus pattern part could not be resolved for writing.",
+                    "The authoritative " + patternLabel + " pattern part could not be resolved for writing.",
                     obj,
                     code: "PatternPartNotFound");
             }
@@ -203,7 +219,7 @@ namespace GxMcp.Worker.Services
                     global::Artech.Architecture.Common.Objects.KBObject refreshedObject = null;
                     if (strictVerify)
                     {
-                    string persistedXml = _patternAnalysisService.ReadPatternPartXml(obj, partName, out refreshedObject, out _);
+                    string persistedXml = _patternAnalysisService.ReadPatternPartXml(obj, partName, resolvedPatternId, out refreshedObject, out _);
 
                     if (!XmlEquivalence.AreEquivalent(persistedXml, normalizedInput, out var patternDiff, out var patternStructured))
                     {
@@ -227,7 +243,7 @@ namespace GxMcp.Worker.Services
                             "Pattern write verification failed",
                             target,
                             partName,
-                            "The SDK save path completed, but the persisted WorkWithPlus pattern XML does not match the requested content. Compare 'persistedSnippet' (what the SDK kept) vs 'requestedSnippet' (what you sent) to see which attribute/child was sanitised. Diff: " + (patternDiff ?? "n/a"),
+                            "The SDK save path completed, but the persisted " + patternLabel + " pattern XML does not match the requested content. Compare 'persistedSnippet' (what the SDK kept) vs 'requestedSnippet' (what you sent) to see which attribute/child was sanitised. Diff: " + (patternDiff ?? "n/a"),
                             refreshedObject ?? resolvedObject,
                             patternStructured,
                             code: "PatternVerificationMismatch");
@@ -319,6 +335,7 @@ namespace GxMcp.Worker.Services
                         success["resolvedObject"] = resolvedObject.Name;
                         success["resolvedType"] = resolvedObject.TypeDescriptor?.Name;
                     }
+                    if (currentPattern != null) success["patternName"] = currentPattern.Name;
 
                     // Friction 2026-05-26 — re-assert "Apply this pattern on
                     // save" on the WorkWithPlus host. The raw obj.Save(prefs)
@@ -406,6 +423,45 @@ namespace GxMcp.Worker.Services
                     transaction.Rollback();
                     return CreateWriteError("Pattern write failed", target, partName, ex.Message, resolvedObject ?? obj, code: "PatternSaveFailed");
                 }
+            }
+        }
+
+        // Ambiguity (PatternInstanceAmbiguous) or mismatch (PatternMismatch) from pattern
+        // instance resolution, surfaced with the candidates and one read nextStep each.
+        private string CreatePatternResolutionError(string target, string partName, JObject diagnostic, global::Artech.Architecture.Common.Objects.KBObject obj)
+        {
+            string code = diagnostic["code"]?.ToString() ?? "PatternInstanceAmbiguous";
+            string error = CreateWriteError(
+                code == "PatternMismatch" ? "Pattern mismatch" : "Pattern instance ambiguous",
+                target,
+                partName,
+                diagnostic["message"]?.ToString() ?? "The pattern instance to write could not be selected.",
+                obj,
+                code: code);
+            try
+            {
+                var json = JObject.Parse(error);
+                var errObj = json["error"] as JObject ?? json;
+                if (diagnostic["candidates"] is JArray candidates)
+                {
+                    errObj["candidates"] = candidates;
+                    var steps = new JArray();
+                    foreach (var candidate in candidates)
+                    {
+                        string name = candidate["name"]?.ToString();
+                        if (string.IsNullOrWhiteSpace(name)) continue;
+                        steps.Add(Models.McpResponse.NextStep(
+                            tool: "genexus_read",
+                            args: new JObject { ["name"] = name, ["part"] = partName },
+                            why: "Read the " + candidate["pattern"] + " instance '" + name + "', then edit it by name."));
+                    }
+                    if (steps.Count > 0) errObj["nextSteps"] = steps;
+                }
+                return json.ToString();
+            }
+            catch
+            {
+                return error;
             }
         }
 

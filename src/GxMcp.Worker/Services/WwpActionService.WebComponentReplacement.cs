@@ -124,9 +124,9 @@ namespace GxMcp.Worker.Services
             lock (WriteService.AcquirePerTargetLock(target))
             {
                 KBObject lockedTarget = _objects.FindObject(target) ?? requestedObject;
-                string currentXml = _patterns.ReadPatternPartXml(lockedTarget, "PatternInstance",
+                string currentXml = _patterns.ReadPatternPartXml(lockedTarget, "PatternInstance", PatternRegistry.WorkWithPlusPatternId,
                     out KBObject currentInstance, out _);
-                _patterns.BuildPatternPartEnvelope(lockedTarget, "PatternInstance", currentXml,
+                _patterns.BuildPatternPartEnvelope(lockedTarget, "PatternInstance", currentXml, PatternRegistry.WorkWithPlusPatternId,
                     out _, out KBObjectPart currentPart);
                 if (currentInstance == null || currentPart == null || string.IsNullOrWhiteSpace(currentXml))
                     return McpResponse.Err(code: "WWPInstanceNotFound",
@@ -193,7 +193,7 @@ namespace GxMcp.Worker.Services
 
                     SaveNativePattern(currentInstance, currentPart);
                     bool applyOnSaveReenabled = WwpApplyOnSaveHelper.TryEnable(currentInstance);
-                    string persistedXml = _patterns.ReadPatternPartXml(currentInstance, "PatternInstance",
+                    string persistedXml = _patterns.ReadPatternPartXml(currentInstance, "PatternInstance", PatternRegistry.WorkWithPlusPatternId,
                         out KBObject persistedInstance, out _);
                     JObject patternVerification = VerifyReplacementXml(lockedBefore,
                         XDocument.Parse(persistedXml, LoadOptions.PreserveWhitespace), request);
@@ -652,7 +652,7 @@ namespace GxMcp.Worker.Services
                 RestorePartBytes(part, nativeBytes);
                 SaveNativePattern(instance, part);
                 if (!IsFalse(applyOnSaveBefore)) WwpApplyOnSaveHelper.TryEnable(instance);
-                string restored = _patterns.ReadPatternPartXml(instance, "PatternInstance", out KBObject restoredInstance, out _);
+                string restored = _patterns.ReadPatternPartXml(instance, "PatternInstance", PatternRegistry.WorkWithPlusPatternId, out KBObject restoredInstance, out _);
                 patternRestored = string.Equals(Sha256(restored), Sha256(patternXml), StringComparison.OrdinalIgnoreCase);
                 if (parent != null && webForm != null && restoredInstance != null)
                 {

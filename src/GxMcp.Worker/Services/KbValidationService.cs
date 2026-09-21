@@ -77,7 +77,8 @@ namespace GxMcp.Worker.Services
                     {
                         var obj = _objectService.FindObject(entry.Name, entry.Type);
                         if (obj == null) continue;
-                        xml = _patternAnalysisService.ReadPatternPartXml(obj, "PatternInstance", out _, out _);
+                        // WorkWithPlus-only: the scan reads WWP gridAttribute conditions (issue #260).
+                        xml = _patternAnalysisService.ReadPatternPartXml(obj, "PatternInstance", PatternRegistry.WorkWithPlusPatternId, out _, out _);
                     }
                     catch { continue; }
 

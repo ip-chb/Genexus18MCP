@@ -269,7 +269,7 @@ namespace GxMcp.Worker.Services
                     why: "Search for objects matching the name to find the correct identifier.")),
                 target: target);
 
-            string xml = _patternAnalysisService.ReadPatternPartXml(obj, "PatternInstance", out _, out _);
+            string xml = _patternAnalysisService.ReadPatternPartXml(obj, "PatternInstance", PatternRegistry.WorkWithPlusPatternId, out _, out _);
             if (string.IsNullOrWhiteSpace(xml))
                 return Models.McpResponse.Err(
                     code: "PatternInstanceNotFound",

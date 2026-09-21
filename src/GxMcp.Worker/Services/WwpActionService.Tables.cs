@@ -76,9 +76,9 @@ namespace GxMcp.Worker.Services
             lock (WriteService.AcquirePerTargetLock(target))
             {
                 KBObject lockedTarget = _objects.FindObject(target) ?? requestedObject;
-                string currentXml = _patterns.ReadPatternPartXml(lockedTarget, "PatternInstance",
+                string currentXml = _patterns.ReadPatternPartXml(lockedTarget, "PatternInstance", PatternRegistry.WorkWithPlusPatternId,
                     out KBObject currentInstance, out _);
-                _patterns.BuildPatternPartEnvelope(lockedTarget, "PatternInstance", currentXml,
+                _patterns.BuildPatternPartEnvelope(lockedTarget, "PatternInstance", currentXml, PatternRegistry.WorkWithPlusPatternId,
                     out _, out KBObjectPart currentPart);
                 if (currentInstance == null || currentPart == null || string.IsNullOrWhiteSpace(currentXml))
                     return McpResponse.Err(code: "WWPInstanceNotFound",
@@ -176,7 +176,7 @@ namespace GxMcp.Worker.Services
 
                     SaveNativePattern(currentInstance, currentPart);
                     bool applyOnSaveReenabled = WwpApplyOnSaveHelper.TryEnable(currentInstance);
-                    string persistedXml = _patterns.ReadPatternPartXml(currentInstance, "PatternInstance",
+                    string persistedXml = _patterns.ReadPatternPartXml(currentInstance, "PatternInstance", PatternRegistry.WorkWithPlusPatternId,
                         out KBObject persistedInstance, out _);
                     if (string.IsNullOrWhiteSpace(persistedXml))
                         throw new WwpTabException("WwpTableTypeNotPersisted", "The SDK save completed, but the PatternInstance could not be re-read.");

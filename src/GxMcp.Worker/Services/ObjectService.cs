@@ -4536,9 +4536,38 @@ namespace GxMcp.Worker.Services
                 {
                     global::Artech.Architecture.Common.Objects.KBObject resolvedObject = null;
                     string resolvedPartName = partName;
-                    string patternXml = _patternAnalysisService?.ReadPatternPartXmlFresh(obj, partName, out resolvedObject, out resolvedPartName);
+                    JObject patternDiagnostic = null;
+                    bool propertiesOnly = false;
+                    string patternXml = _patternAnalysisService?.ReadPatternPartXmlFresh(obj, partName, null, out resolvedObject, out resolvedPartName, out patternDiagnostic);
                     if (string.IsNullOrEmpty(patternXml))
                     {
+                        // Issue #260: a parent with several pattern instances (e.g. K2BEntityServices,
+                        // K2BPrompt, K2BTrnForm) has no single PatternInstance; ask for the instance.
+                        if (string.Equals(patternDiagnostic?["code"]?.ToString(), "PatternInstanceAmbiguous", StringComparison.Ordinal))
+                        {
+                            var ambiguitySteps = new JArray();
+                            foreach (var candidate in (patternDiagnostic["candidates"] as JArray ?? new JArray()))
+                            {
+                                string candidateName = candidate["name"]?.ToString();
+                                if (string.IsNullOrWhiteSpace(candidateName)) continue;
+                                ambiguitySteps.Add(Models.McpResponse.NextStep(
+                                    tool: "genexus_read",
+                                    args: new JObject { ["name"] = candidateName, ["part"] = partName },
+                                    why: "Read the " + candidate["pattern"] + " instance '" + candidateName + "'."));
+                            }
+                            return McpResponse.Err(
+                                code: "PatternInstanceAmbiguous",
+                                message: patternDiagnostic["message"]?.ToString() ?? "Several pattern instances match.",
+                                hint: "Read one instance by name; each candidate below is a separate pattern instance of '" + obj.Name + "'.",
+                                nextSteps: ambiguitySteps,
+                                target: targetName,
+                                errorExtra: new JObject
+                                {
+                                    ["part"] = partName,
+                                    ["candidates"] = patternDiagnostic["candidates"]
+                                });
+                        }
+
                         var freshDiagnostic = GetLastResolutionDiagnostic();
                         if (string.Equals(freshDiagnostic?["code"]?.ToString(), "FreshReadUnavailable", StringComparison.OrdinalIgnoreCase))
                         {
@@ -4550,7 +4579,7 @@ namespace GxMcp.Worker.Services
                                 errorExtra: freshDiagnostic);
                         }
 
-                        // PatternVirtual fallback: serialise the matching part directly when the WWP+ analyser bails.
+                        // PatternVirtual fallback: serialise the matching part directly when the pattern analyser bails.
                         try
                         {
                             var rawPart = obj.Parts.Cast<global::Artech.Architecture.Common.Objects.KBObjectPart>()
@@ -4561,6 +4590,9 @@ namespace GxMcp.Worker.Services
                             {
                                 patternXml = rawPart.SerializeToXml();
                                 resolvedPartName = rawPart.TypeDescriptor?.Name ?? rawPart.GetType().Name;
+                                // SerializeToXml only round-trips the part's <Properties> bag, not the
+                                // instance XML; flag it so callers do not mistake it for the instance.
+                                propertiesOnly = PatternAnalysisService.IsPropertiesOnlyFragment(patternXml);
                             }
                         }
                         catch (Exception fbEx) { Logger.Debug("[PatternRead] raw-serialize fallback failed: " + fbEx.Message); }
@@ -4569,11 +4601,11 @@ namespace GxMcp.Worker.Services
                             return Models.McpResponse.Err(
                                 code: "PatternXmlUnavailable",
                                 message: "Pattern XML not available.",
-                                hint: "The requested WorkWithPlus pattern part could not be resolved through the current SDK path. Confirm the object has a pattern attached (genexus_inspect target=...).",
+                                hint: "The requested pattern part could not be resolved through the current SDK path. Confirm the object has a pattern instance attached (genexus_inspect target=...).",
                                 nextSteps: new JArray(Models.McpResponse.NextStep(
                                     tool: "genexus_inspect",
                                     args: new JObject { ["name"] = targetName },
-                                    why: "Confirms whether a WorkWithPlus pattern is attached and which parts are exposed.")),
+                                    why: "Confirms whether a pattern instance is attached and which parts are exposed.")),
                                 target: targetName,
                                 extra: new JObject
                                 {
@@ -4591,10 +4623,23 @@ namespace GxMcp.Worker.Services
                         ["xmlKind"] = resolvedPartName
                     };
 
-                    if (resolvedObject != null && resolvedObject.Guid != obj.Guid)
+                    if (resolvedObject != null)
                     {
                         patternResult["resolvedObject"] = resolvedObject.Name;
-                        patternResult["resolvedType"] = resolvedObject.TypeDescriptor?.Name;
+                        if (resolvedObject.Guid != obj.Guid)
+                            patternResult["resolvedType"] = resolvedObject.TypeDescriptor?.Name;
+                        var resolvedPattern = _patternAnalysisService?.MatchInstancePattern(resolvedObject);
+                        if (resolvedPattern != null)
+                        {
+                            patternResult["patternName"] = resolvedPattern.Name;
+                            patternResult["patternId"] = resolvedPattern.Id.ToString();
+                        }
+                    }
+
+                    if (propertiesOnly)
+                    {
+                        patternResult["propertiesOnly"] = true;
+                        patternResult["warning"] = "The pattern instance XML could not be resolved; this is only the part's <Properties> bag, not the instance definition. Do not edit it as the instance.";
                     }
 
                     ProcessTextResponse(patternXml, patternResult, client);
@@ -4788,6 +4833,18 @@ namespace GxMcp.Worker.Services
             catch { }
 
             string typeName = obj?.TypeDescriptor?.Name ?? "";
+
+            // Issue #260: a pattern instance (WorkWithPlus, K2BEntityServices, ...) reads its
+            // PatternInstance by default instead of whichever part the SDK lists first.
+            try
+            {
+                if (obj != null &&
+                    PatternRegistry.Current.MatchInstanceType(typeName, obj.TypeDescriptor?.Id ?? Guid.Empty) != null &&
+                    GxMcp.Worker.Structure.PartAccessor.GetAvailableParts(obj)
+                        .Any(p => string.Equals(p, "PatternInstance", StringComparison.OrdinalIgnoreCase)))
+                    return "PatternInstance";
+            }
+            catch { }
             if (typeName.Equals("SDT", StringComparison.OrdinalIgnoreCase) ||
                 typeName.IndexOf("StructuredDataType", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "SDTStructure";

@@ -116,6 +116,17 @@ namespace GxMcp.Worker.Tests
         }
 
         [Fact]
+        public void MatchInstanceType_NativeTypeSharingPatternName_DoesNotMatch()
+        {
+            var registry = K2BRegistry();
+
+            // Same name as the pattern but a different, known type GUID: native type.
+            Assert.Null(registry.MatchInstanceType("K2BMenu", Guid.NewGuid()));
+            // WorkWithPlus keeps its name-based match regardless of the type GUID.
+            Assert.Equal("WorkWithPlus", registry.MatchInstanceType("WorkWithPlus", Guid.NewGuid())?.Name);
+        }
+
+        [Fact]
         public void Discover_ScansPackageFolders_AndSkipsMalformedManifests()
         {
             string root = Path.Combine(Path.GetTempPath(), "gxmcp-pattern-registry-" + Guid.NewGuid().ToString("N"));

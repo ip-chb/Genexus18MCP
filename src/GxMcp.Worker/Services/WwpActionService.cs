@@ -62,7 +62,7 @@ namespace GxMcp.Worker.Services
                         nextSteps: new JArray(McpResponse.NextStep("genexus_search",
                             new JObject { ["query"] = target }, "Find the WorkWithPlus parent or instance by name.")));
 
-                string xml = _patterns.ReadPatternPartXml(requestedObject, "PatternInstance",
+                string xml = _patterns.ReadPatternPartXml(requestedObject, "PatternInstance", PatternRegistry.WorkWithPlusPatternId,
                     out KBObject instance, out _);
                 if (instance == null || string.IsNullOrWhiteSpace(xml))
                     return McpResponse.Err(code: "WWPInstanceNotFound",
@@ -79,7 +79,7 @@ namespace GxMcp.Worker.Services
                             ["expectedVersion"] = expectedVersion,
                             ["currentVersion"] = versionToken
                         });
-                _patterns.BuildPatternPartEnvelope(requestedObject, "PatternInstance", xml,
+                _patterns.BuildPatternPartEnvelope(requestedObject, "PatternInstance", xml, PatternRegistry.WorkWithPlusPatternId,
                     out _, out KBObjectPart instancePart);
 
                 string operation = NormalizeOperation(args?["action"]?.ToString());
@@ -150,7 +150,7 @@ namespace GxMcp.Worker.Services
                 }
 
                 KBObject refreshedTarget = _objects.FindObject(target) ?? requestedObject;
-                string persistedXml = _patterns.ReadPatternPartXml(refreshedTarget, "PatternInstance", out KBObject persistedInstance, out _);
+                string persistedXml = _patterns.ReadPatternPartXml(refreshedTarget, "PatternInstance", PatternRegistry.WorkWithPlusPatternId, out KBObject persistedInstance, out _);
                 JObject persisted = string.IsNullOrWhiteSpace(persistedXml)
                     ? new JObject()
                     : Project(XDocument.Parse(persistedXml, LoadOptions.PreserveWhitespace));
@@ -225,7 +225,7 @@ namespace GxMcp.Worker.Services
                 if (!IsSuccess(write)) return result;
 
                 KBObject refreshedTarget = _objects.FindObject(target) ?? fallbackTarget;
-                string persistedXml = _patterns.ReadPatternPartXml(refreshedTarget, "PatternInstance", out _, out _);
+                string persistedXml = _patterns.ReadPatternPartXml(refreshedTarget, "PatternInstance", PatternRegistry.WorkWithPlusPatternId, out _, out _);
                 JObject persisted = string.IsNullOrWhiteSpace(persistedXml)
                     ? new JObject()
                     : Project(XDocument.Parse(persistedXml, LoadOptions.PreserveWhitespace));

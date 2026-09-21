@@ -56,11 +56,11 @@ namespace GxMcp.Worker.Services
             lock (WriteService.AcquirePerTargetLock(target))
             {
                 KBObject lockedTarget = _objects.FindObject(target) ?? requestedObject;
-                string currentXml = _patterns.ReadPatternPartXml(lockedTarget, "PatternInstance",
+                string currentXml = _patterns.ReadPatternPartXml(lockedTarget, "PatternInstance", PatternRegistry.WorkWithPlusPatternId,
                     out KBObject currentInstance, out _);
                 KBObject resolvedCurrentObject;
                 KBObjectPart currentPart;
-                _patterns.BuildPatternPartEnvelope(lockedTarget, "PatternInstance", currentXml,
+                _patterns.BuildPatternPartEnvelope(lockedTarget, "PatternInstance", currentXml, PatternRegistry.WorkWithPlusPatternId,
                     out resolvedCurrentObject, out currentPart);
                 if (currentInstance == null || currentPart == null || string.IsNullOrWhiteSpace(currentXml))
                     return McpResponse.Err(code: "WWPInstanceNotFound",
@@ -125,7 +125,7 @@ namespace GxMcp.Worker.Services
                     SaveNativePattern(currentInstance, currentPart);
                     bool applyOnSaveReenabled = WwpApplyOnSaveHelper.TryEnable(currentInstance);
                     KBObject persistedInstance;
-                    string persistedXml = _patterns.ReadPatternPartXml(currentInstance, "PatternInstance",
+                    string persistedXml = _patterns.ReadPatternPartXml(currentInstance, "PatternInstance", PatternRegistry.WorkWithPlusPatternId,
                         out persistedInstance, out _);
                     if (string.IsNullOrWhiteSpace(persistedXml))
                         throw new WwpTabException("WwpFormActionNotPersisted",

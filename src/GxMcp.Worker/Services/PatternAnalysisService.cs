@@ -9,14 +9,130 @@ using GxMcp.Worker.Helpers;
 
 namespace GxMcp.Worker.Services
 {
+    /// <summary>Identity of an object considered during pattern instance resolution.</summary>
+    internal sealed class PatternInstanceCandidate
+    {
+        public PatternInstanceCandidate(string name, string typeName, Guid typeGuid, object source = null)
+        {
+            Name = name;
+            TypeName = typeName;
+            TypeGuid = typeGuid;
+            Source = source;
+        }
+
+        public string Name { get; }
+        public string TypeName { get; }
+        public Guid TypeGuid { get; }
+        /// <summary>The KBObject this candidate was built from; null in unit tests.</summary>
+        public object Source { get; }
+    }
+
+    internal sealed class PatternInstanceMatch
+    {
+        public PatternInstanceMatch(PatternInstanceCandidate candidate, PatternManifest pattern)
+        {
+            Candidate = candidate;
+            Pattern = pattern;
+        }
+
+        public PatternInstanceCandidate Candidate { get; }
+        public PatternManifest Pattern { get; }
+    }
+
+    internal enum PatternInstanceSelectionStatus { Selected, NotFound, Ambiguous, Mismatch }
+
+    internal sealed class PatternInstanceSelection
+    {
+        public PatternInstanceSelectionStatus Status { get; private set; }
+        public PatternInstanceMatch Selected { get; private set; }
+        public IReadOnlyList<PatternInstanceMatch> Candidates { get; private set; } = new PatternInstanceMatch[0];
+        public PatternManifest RequestedPattern { get; private set; }
+
+        public static PatternInstanceSelection Select(PatternInstanceMatch match) =>
+            new PatternInstanceSelection { Status = PatternInstanceSelectionStatus.Selected, Selected = match };
+
+        public static PatternInstanceSelection NotFound(PatternManifest requestedPattern) =>
+            new PatternInstanceSelection { Status = PatternInstanceSelectionStatus.NotFound, RequestedPattern = requestedPattern };
+
+        public static PatternInstanceSelection Ambiguous(IReadOnlyList<PatternInstanceMatch> candidates) =>
+            new PatternInstanceSelection { Status = PatternInstanceSelectionStatus.Ambiguous, Candidates = candidates };
+
+        public static PatternInstanceSelection Mismatch(PatternInstanceMatch actual, PatternManifest requestedPattern) =>
+            new PatternInstanceSelection
+            {
+                Status = PatternInstanceSelectionStatus.Mismatch,
+                Candidates = new[] { actual },
+                RequestedPattern = requestedPattern
+            };
+
+        /// <summary>Structured diagnostic for ambiguity or pattern mismatch; null for other outcomes.</summary>
+        public JObject ToDiagnostic(string objectName)
+        {
+            if (Status == PatternInstanceSelectionStatus.Ambiguous)
+            {
+                return new JObject
+                {
+                    ["code"] = "PatternInstanceAmbiguous",
+                    ["message"] = "'" + objectName + "' has " + Candidates.Count + " pattern instances; name the instance to read or edit.",
+                    ["objectName"] = objectName,
+                    ["candidates"] = new JArray(Candidates.Select(c => new JObject
+                    {
+                        ["name"] = c.Candidate.Name,
+                        ["pattern"] = c.Pattern.Name,
+                        ["patternId"] = c.Pattern.Id.ToString()
+                    }))
+                };
+            }
+
+            if (Status == PatternInstanceSelectionStatus.Mismatch && Candidates.Count > 0)
+            {
+                var actual = Candidates[0];
+                return new JObject
+                {
+                    ["code"] = "PatternMismatch",
+                    ["message"] = "'" + objectName + "' is a " + actual.Pattern.Name + " instance, not a " + (RequestedPattern?.Name ?? "requested pattern") + " instance.",
+                    ["objectName"] = objectName,
+                    ["objectPattern"] = actual.Pattern.Name,
+                    ["objectPatternId"] = actual.Pattern.Id.ToString(),
+                    ["requestedPattern"] = RequestedPattern?.Name,
+                    ["requestedPatternId"] = RequestedPattern?.Id.ToString()
+                };
+            }
+
+            return null;
+        }
+    }
+
     public class PatternAnalysisService
     {
         private static readonly Guid PatternInstancePartGuid = new Guid("a51ced48-7bee-0001-ab12-04e9e32123d1");
         private readonly ObjectService _objectService;
+        private PatternRegistry _registry;
 
         public PatternAnalysisService(ObjectService objectService)
         {
             _objectService = objectService;
+        }
+
+        internal PatternAnalysisService(ObjectService objectService, PatternRegistry registry)
+        {
+            _objectService = objectService;
+            _registry = registry;
+        }
+
+        /// <summary>Installed patterns; defaults lazily to the active installation's registry.</summary>
+        internal PatternRegistry Registry
+        {
+            get => _registry ?? (_registry = PatternRegistry.Current);
+            set => _registry = value;
+        }
+
+        /// <summary>Registered pattern the object is an instance of, or null.</summary>
+        internal PatternManifest MatchInstancePattern(KBObject obj)
+        {
+            if (obj == null) return null;
+            try { return Registry.MatchInstanceType(obj.TypeDescriptor?.Name, GetTypeGuid(obj)); }
+            catch { return null; }
         }
 
         public string GetWWPStructure(string target)
@@ -147,6 +263,157 @@ namespace GxMcp.Worker.Services
             return null;
         }
 
+        /// <summary>
+        /// Pure pattern instance selection over already gathered candidates (issue #260).
+        /// <list type="number">
+        /// <item>The requested object is itself a registered pattern instance: select it,
+        /// or report a mismatch when <paramref name="patternId"/> names another pattern.</item>
+        /// <item>With <paramref name="patternId"/>: the candidate named by the pattern's
+        /// instance template, else any candidate of that pattern.</item>
+        /// <item>Without it: WorkWithPlus first (template-named, then any WWP child), else the
+        /// single registered-pattern candidate; several are ambiguous.</item>
+        /// </list>
+        /// </summary>
+        internal static PatternInstanceSelection SelectPatternInstance(
+            PatternInstanceCandidate requested,
+            IReadOnlyList<PatternInstanceCandidate> children,
+            Guid? patternId,
+            PatternRegistry registry)
+        {
+            registry = registry ?? new PatternRegistry(null);
+
+            PatternManifest wanted = null;
+            if (patternId.HasValue)
+                wanted = registry.FindById(patternId.Value) ?? new PatternManifest { Id = patternId.Value, Name = patternId.Value.ToString() };
+
+            if (requested != null)
+            {
+                var own = registry.MatchInstanceType(requested.TypeName, requested.TypeGuid);
+                if (own != null)
+                {
+                    var self = new PatternInstanceMatch(requested, own);
+                    return wanted != null && own.Id != wanted.Id
+                        ? PatternInstanceSelection.Mismatch(self, wanted)
+                        : PatternInstanceSelection.Select(self);
+                }
+            }
+
+            var matches = new List<PatternInstanceMatch>();
+            foreach (var child in children ?? new PatternInstanceCandidate[0])
+            {
+                if (child == null || string.IsNullOrWhiteSpace(child.Name)) continue;
+                var pattern = registry.MatchInstanceType(child.TypeName, child.TypeGuid);
+                if (pattern == null && wanted != null && child.TypeGuid == wanted.Id) pattern = wanted;
+                if (pattern == null) continue;
+                if (matches.Any(m => m.Pattern.Id == pattern.Id &&
+                                     string.Equals(m.Candidate.Name, child.Name, StringComparison.OrdinalIgnoreCase))) continue;
+                matches.Add(new PatternInstanceMatch(child, pattern));
+            }
+
+            string parentName = requested?.Name;
+            if (wanted != null)
+            {
+                var found = PreferTemplateNamed(matches.Where(m => m.Pattern.Id == wanted.Id).ToList(), wanted, parentName);
+                return found != null ? PatternInstanceSelection.Select(found) : PatternInstanceSelection.NotFound(wanted);
+            }
+
+            var wwp = PreferTemplateNamed(matches.Where(m => m.Pattern.IsWorkWithPlus).ToList(),
+                registry.FindById(PatternRegistry.WorkWithPlusPatternId), parentName);
+            if (wwp != null) return PatternInstanceSelection.Select(wwp);
+
+            if (matches.Count == 1) return PatternInstanceSelection.Select(matches[0]);
+            if (matches.Count > 1) return PatternInstanceSelection.Ambiguous(matches);
+            return PatternInstanceSelection.NotFound(null);
+        }
+
+        private static PatternInstanceMatch PreferTemplateNamed(List<PatternInstanceMatch> ofPattern, PatternManifest pattern, string parentName)
+        {
+            if (ofPattern.Count == 0) return null;
+            string expected = pattern?.FormatInstanceName(parentName);
+            if (!string.IsNullOrWhiteSpace(expected))
+            {
+                var named = ofPattern.FirstOrDefault(m => string.Equals(m.Candidate.Name, expected, StringComparison.OrdinalIgnoreCase));
+                if (named != null) return named;
+            }
+            return ofPattern[0];
+        }
+
+        private static Guid GetTypeGuid(KBObject obj)
+        {
+            try { return obj?.TypeDescriptor?.Id ?? Guid.Empty; }
+            catch { return Guid.Empty; }
+        }
+
+        private static PatternInstanceCandidate ToCandidate(KBObject obj) =>
+            obj == null ? null : new PatternInstanceCandidate(obj.Name, obj.TypeDescriptor?.Name, GetTypeGuid(obj), obj);
+
+        /// <summary>
+        /// Resolves the pattern instance that owns the pattern parts of <paramref name="obj"/>
+        /// for any registered pattern (see <see cref="SelectPatternInstance"/>). With
+        /// <paramref name="fresh"/> the resolved instance is re-read through a fresh SDK
+        /// resolution. <paramref name="diagnostic"/> carries PatternInstanceAmbiguous or
+        /// PatternMismatch when resolution was refused, null otherwise.
+        /// </summary>
+        public KBObject ResolvePatternInstance(KBObject obj, Guid? patternId, bool fresh, out JObject diagnostic)
+        {
+            diagnostic = null;
+            if (obj == null) return null;
+
+            var registry = Registry;
+            var requested = ToCandidate(obj);
+            var selection = SelectPatternInstance(requested, null, patternId, registry);
+            if (selection.Status == PatternInstanceSelectionStatus.Selected) return obj;
+            if (selection.Status == PatternInstanceSelectionStatus.Mismatch)
+            {
+                diagnostic = selection.ToDiagnostic(obj.Name);
+                return null;
+            }
+
+            // Template-named lookup first (WorkWithPlus<Name> without a patternId): it wins
+            // the selection outright, so a hit skips the child walk exactly like the WWP path.
+            var namedPattern = registry.FindById(patternId ?? PatternRegistry.WorkWithPlusPatternId);
+            string namedInstance = namedPattern?.FormatInstanceName(obj.Name);
+            if (!string.IsNullOrWhiteSpace(namedInstance) && _objectService != null)
+            {
+                var named = fresh
+                    ? _objectService.FindObjectFresh(namedInstance, namedPattern.Name)
+                    : _objectService.FindObject(namedInstance, namedPattern.Name);
+                if (named != null)
+                {
+                    selection = SelectPatternInstance(requested, new[] { ToCandidate(named) }, patternId, registry);
+                    if (selection.Status == PatternInstanceSelectionStatus.Selected) return named;
+                }
+            }
+
+            var children = new List<PatternInstanceCandidate>();
+            try
+            {
+                var model = obj.Model;
+                if (model != null)
+                {
+                    foreach (KBObject child in model.Objects.GetChildren(obj))
+                    {
+                        if (child != null) children.Add(ToCandidate(child));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug("[PatternResolve] child walk failed for " + obj.Name + ": " + ex.Message);
+            }
+
+            selection = SelectPatternInstance(requested, children, patternId, registry);
+            if (selection.Status != PatternInstanceSelectionStatus.Selected)
+            {
+                diagnostic = selection.ToDiagnostic(obj.Name);
+                return null;
+            }
+
+            var selected = selection.Selected.Candidate;
+            if (fresh) return _objectService?.FindObjectFresh(selected.Name, selected.TypeName);
+            return selected.Source as KBObject;
+        }
+
         public KBObjectPart FindPatternPart(KBObject instanceObj, string partName)
         {
             if (instanceObj == null || string.IsNullOrWhiteSpace(partName)) return null;
@@ -166,27 +433,42 @@ namespace GxMcp.Worker.Services
             });
         }
 
+        /// <summary>Reads a pattern part from the instance of any registered pattern (see <see cref="ResolvePatternInstance"/>).</summary>
         public string ReadPatternPartXml(KBObject obj, string partName, out KBObject resolvedObject, out string resolvedPartName)
         {
-            resolvedObject = ResolveWWPInstance(obj);
-            resolvedPartName = partName;
-            if (resolvedObject == null) return null;
+            return ReadPatternPartXml(obj, partName, null, out resolvedObject, out resolvedPartName, out _);
+        }
 
-            var part = FindPatternPart(resolvedObject, partName);
-            if (part == null) return null;
+        /// <summary>Reads a pattern part restricted to <paramref name="patternId"/> (e.g. WorkWithPlus-only callers).</summary>
+        public string ReadPatternPartXml(KBObject obj, string partName, Guid? patternId, out KBObject resolvedObject, out string resolvedPartName)
+        {
+            return ReadPatternPartXml(obj, partName, patternId, out resolvedObject, out resolvedPartName, out _);
+        }
 
-            resolvedPartName = !string.IsNullOrWhiteSpace(part.Name) ? part.Name : partName;
-            return ExtractEditablePatternXml(part, resolvedObject);
+        public string ReadPatternPartXml(KBObject obj, string partName, Guid? patternId, out KBObject resolvedObject, out string resolvedPartName, out JObject diagnostic)
+        {
+            resolvedObject = ResolvePatternInstance(obj, patternId, fresh: false, out diagnostic);
+            return ReadResolvedPatternPart(resolvedObject, partName, out resolvedPartName);
         }
 
         /// <summary>
         /// Reads a PatternInstance through a fresh SDK resolution for both the
-        /// requested object and the resolved WorkWithPlus instance. Verification
+        /// requested object and the resolved pattern instance. Verification
         /// must not invalidate only the parent and then re-use a cached child.
         /// </summary>
         public string ReadPatternPartXmlFresh(KBObject obj, string partName, out KBObject resolvedObject, out string resolvedPartName)
         {
-            resolvedObject = ResolveWWPInstanceFresh(obj);
+            return ReadPatternPartXmlFresh(obj, partName, null, out resolvedObject, out resolvedPartName, out _);
+        }
+
+        public string ReadPatternPartXmlFresh(KBObject obj, string partName, Guid? patternId, out KBObject resolvedObject, out string resolvedPartName, out JObject diagnostic)
+        {
+            resolvedObject = ResolvePatternInstance(obj, patternId, fresh: true, out diagnostic);
+            return ReadResolvedPatternPart(resolvedObject, partName, out resolvedPartName);
+        }
+
+        private string ReadResolvedPatternPart(KBObject resolvedObject, string partName, out string resolvedPartName)
+        {
             resolvedPartName = partName;
             if (resolvedObject == null) return null;
 
@@ -223,7 +505,17 @@ namespace GxMcp.Worker.Services
 
         public string BuildPatternPartEnvelope(KBObject obj, string partName, string innerXml, out KBObject resolvedObject, out KBObjectPart resolvedPart)
         {
-            resolvedObject = ResolveWWPInstance(obj);
+            return BuildPatternPartEnvelope(obj, partName, innerXml, null, out resolvedObject, out resolvedPart, out _);
+        }
+
+        public string BuildPatternPartEnvelope(KBObject obj, string partName, string innerXml, Guid? patternId, out KBObject resolvedObject, out KBObjectPart resolvedPart)
+        {
+            return BuildPatternPartEnvelope(obj, partName, innerXml, patternId, out resolvedObject, out resolvedPart, out _);
+        }
+
+        public string BuildPatternPartEnvelope(KBObject obj, string partName, string innerXml, Guid? patternId, out KBObject resolvedObject, out KBObjectPart resolvedPart, out JObject diagnostic)
+        {
+            resolvedObject = ResolvePatternInstance(obj, patternId, fresh: false, out diagnostic);
             resolvedPart = null;
             if (resolvedObject == null) return null;
 
@@ -388,7 +680,33 @@ namespace GxMcp.Worker.Services
             }
         }
 
-        private bool LooksLikePartPropertiesOnly(string xml)
+        /// <summary>
+        /// True when a serialized pattern part carries only its <c>&lt;Properties&gt;</c> bag
+        /// (bare, or wrapped in <c>&lt;Part&gt;</c> without a non-empty <c>&lt;Data&gt;</c>), i.e.
+        /// not the pattern instance XML.
+        /// </summary>
+        internal static bool IsPropertiesOnlyFragment(string xml)
+        {
+            if (string.IsNullOrWhiteSpace(xml)) return false;
+            if (LooksLikePartPropertiesOnly(xml)) return true;
+
+            try
+            {
+                var root = XDocument.Parse(xml, LoadOptions.PreserveWhitespace).Root;
+                if (root == null || !root.Name.LocalName.Equals("Part", StringComparison.OrdinalIgnoreCase)) return false;
+                bool hasData = root.Descendants().Any(e =>
+                    e.Name.LocalName.Equals("Data", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(e.Value));
+                var children = root.Elements().ToList();
+                return !hasData && children.Count > 0 &&
+                       children.All(e => e.Name.LocalName.Equals("Properties", StringComparison.OrdinalIgnoreCase));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        internal static bool LooksLikePartPropertiesOnly(string xml)
         {
             if (string.IsNullOrWhiteSpace(xml)) return false;
 
