@@ -142,6 +142,65 @@ namespace GxMcp.Worker.Tests
             Assert.Equal("error", env["status"]!.ToString());
         }
 
+        // ── Issue #260: manifest-driven gate for patterns other than WorkWithPlus ──
+        private const string EntityServicesManifest =
+            "<Pattern Publisher=\"K2B\" Id=\"589d4b49-e3f9-4d49-aaf4-fad023028eb1\" Name=\"K2BEntityServices\" Version=\"13.1.1.15262\">" +
+            "<Definition><InstanceName>K2BEntityServices{0}</InstanceName>" +
+            "<ParentObjects><ParentObject Type=\"Transaction\"></ParentObject></ParentObjects></Definition></Pattern>";
+
+        private const string MenuManifest =
+            "<Pattern Publisher=\"K2B\" Id=\"ce7b18b7-b5b0-4b27-8c21-b77743938ddf\" Name=\"K2BMenu\" Version=\"13.1.1.15262\">" +
+            "<Definition><InstanceName>K2BMenu</InstanceName>" +
+            "<ParentObjects><ParentObject Type=\"(None)\" /></ParentObjects></Definition></Pattern>";
+
+        [Fact]
+        public void Manifest_AcceptedParentType_NoRejection()
+        {
+            var es = PatternRegistry.ParseManifest(EntityServicesManifest, "es.Pattern");
+            Assert.Null(PatternApplyService.TryBuildManifestTypeGateRejection("Customer", "K2BEntityServices", es, "Transaction"));
+        }
+
+        [Fact]
+        public void Manifest_UndeclaredParentType_RejectedWithManifestParents()
+        {
+            var es = PatternRegistry.ParseManifest(EntityServicesManifest, "es.Pattern");
+
+            string r = PatternApplyService.TryBuildManifestTypeGateRejection("MyPanel", "K2BEntityServices", es, "WebPanel");
+
+            Assert.NotNull(r);
+            var env = JObject.Parse(r);
+            Assert.Equal("PatternParentTypeMismatch", env["error"]?["code"]?.ToString());
+            Assert.Equal(new[] { "Transaction" }, env["validParentTypes"]!.ToObject<string[]>());
+            Assert.Contains("K2BEntityServices", env["error"]?["message"]?.ToString());
+            Assert.DoesNotContain("WorkWithPlus", r);
+        }
+
+        [Fact]
+        public void Manifest_Parentless_RejectedEvenForTransaction()
+        {
+            var menu = PatternRegistry.ParseManifest(MenuManifest, "menu.Pattern");
+
+            string r = PatternApplyService.TryBuildManifestTypeGateRejection("Customer", "K2BMenu", menu, "Transaction");
+
+            Assert.NotNull(r);
+            var env = JObject.Parse(r);
+            Assert.Equal("PatternParentTypeMismatch", env["error"]?["code"]?.ToString());
+            Assert.Contains("no parent object", env["error"]?["message"]?.ToString());
+            Assert.Empty((JArray)env["validParentTypes"]!);
+            Assert.DoesNotContain("WorkWithPlus", r);
+        }
+
+        [Fact]
+        public void Manifest_WwpAndBareGuid_NotGatedHere()
+        {
+            var registry = new PatternRegistry(null);
+            Assert.True(registry.TryResolve("WWP", out var wwp));
+            Assert.True(registry.TryResolve("11111111-2222-3333-4444-555555555555", out var bare));
+
+            Assert.Null(PatternApplyService.TryBuildManifestTypeGateRejection("Foo", "WWP", wwp, "Procedure"));
+            Assert.Null(PatternApplyService.TryBuildManifestTypeGateRejection("Foo", bare.Id.ToString(), bare, "Procedure"));
+        }
+
         [Fact]
         public void WebPanel_EmptyAvailableList_NoTemplateCheck()
         {

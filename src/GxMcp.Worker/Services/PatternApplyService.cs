@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -27,15 +27,9 @@ namespace GxMcp.Worker.Services
     /// </summary>
     public class PatternApplyService
     {
-        // Well-known pattern GUIDs. WorkWithPlus is the only one in scope for W2;
-        // additional pattern keys can be registered here as we expose more tools.
+        // Pattern keys resolve through the installed-pattern registry (issue #260);
+        // WorkWithPlus keeps its dedicated route and is always registered (alias WWP).
         public static readonly Guid WorkWithPlusPatternId = PatternRegistry.WorkWithPlusPatternId;
-
-        private static readonly Dictionary<string, Guid> KnownPatterns = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "WorkWithPlus", WorkWithPlusPatternId },
-            { "WWP", WorkWithPlusPatternId },
-        };
 
         internal sealed class WwpEnvironmentContext
         {
@@ -71,6 +65,10 @@ namespace GxMcp.Worker.Services
         // Test seam: when set, used instead of _objectService.FindObject to resolve
         // the parent KBObject. The live path always uses _objectService.
         private readonly Func<string, KBObject> _findObjectOverride;
+        // Installed patterns; null means "resolve lazily from the active installation".
+        private PatternRegistry _registry;
+        // Pattern instance discovery (instance type matching, child walk); lazily built.
+        private PatternAnalysisService _analysis;
 
         public PatternApplyService(ObjectService objectService)
             : this(objectService, new ReflectionPatternEngineAdapter(), null)
@@ -84,10 +82,40 @@ namespace GxMcp.Worker.Services
 
         // Test ctor: lets unit tests bypass the live SDK FindObject lookup.
         internal PatternApplyService(ObjectService objectService, IPatternEngineAdapter engine, Func<string, KBObject> findObjectOverride)
+            : this(objectService, engine, findObjectOverride, null, null)
+        {
+        }
+
+        // Test ctor: also injects the pattern registry and the instance resolver.
+        internal PatternApplyService(
+            ObjectService objectService,
+            IPatternEngineAdapter engine,
+            Func<string, KBObject> findObjectOverride,
+            PatternRegistry registry,
+            PatternAnalysisService analysis = null)
         {
             _objectService = objectService;
             _engine = engine;
             _findObjectOverride = findObjectOverride;
+            _registry = registry;
+            _analysis = analysis;
+        }
+
+        internal PatternRegistry Registry => _registry ?? (_registry = PatternRegistry.Current);
+
+        private PatternAnalysisService Analysis => _analysis ?? (_analysis = new PatternAnalysisService(_objectService, Registry));
+
+        private bool TryResolvePattern(string patternKey, out PatternManifest manifest)
+        {
+            manifest = null;
+            if (string.IsNullOrWhiteSpace(patternKey)) return false;
+            return Registry.TryResolve(patternKey, out manifest);
+        }
+
+        // Manifest for an already resolved id; an unregistered GUID gets a bare entry.
+        private PatternManifest ManifestFor(Guid patternId)
+        {
+            return Registry.FindById(patternId) ?? new PatternManifest { Id = patternId, Name = patternId.ToString() };
         }
 
         private KBObject ResolveObject(string objectName)
@@ -108,8 +136,9 @@ namespace GxMcp.Worker.Services
                 if (string.IsNullOrWhiteSpace(patternKey))
                     return McpResponse.Err(code: "MissingPatternKey", message: "Pattern key is required.", hint: "Pass pattern='WorkWithPlus' or a known GUID.", target: objectName);
 
-                if (!TryResolvePatternId(patternKey, out Guid patternId))
-                    return PatternUnavailable(patternKey, "Unknown pattern key. Pass 'WorkWithPlus' or a known GUID.");
+                if (!TryResolvePattern(patternKey, out PatternManifest pattern))
+                    return PatternUnavailable(patternKey, "Unknown pattern key. Pass an installed pattern name (see availablePatterns), the alias 'WWP', or a pattern GUID.", Registry.Names());
+                Guid patternId = pattern.Id;
 
                 KBObject obj = ResolveObject(objectName);
                 if (obj == null)
@@ -125,6 +154,7 @@ namespace GxMcp.Worker.Services
                 // the rejection envelope shape is unit-testable without a real
                 // KBObject. Live template enumeration stays in this scope because
                 // it needs _objectService.
+                if (pattern.IsWorkWithPlus)
                 {
                     string parentType = obj.TypeDescriptor?.Name ?? "";
                     string callerTemplate = settings != null ? settings["template"]?.ToString() : null;
@@ -134,15 +164,22 @@ namespace GxMcp.Worker.Services
                     {
                         try { availableTemplates = ListWwpWebTemplates(); } catch { /* best-effort */ }
                     }
-                    string reject = TryBuildTypeGateRejection(obj.Name, patternKey, parentType, callerTemplate, availableTemplates);
+                    // A GUID key still selects WorkWithPlus; the gate is keyed by name.
+                    string gateKey = IsWwpKey(patternKey) ? patternKey : "WorkWithPlus";
+                    string reject = TryBuildTypeGateRejection(obj.Name, gateKey, parentType, callerTemplate, availableTemplates);
+                    if (reject != null) return reject;
+                }
+                else
+                {
+                    string reject = TryBuildManifestTypeGateRejection(obj.Name, patternKey, pattern, obj.TypeDescriptor?.Name ?? "");
                     if (reject != null) return reject;
                 }
 
                 // IDE lock pre-check (parity with ReapplyPattern). The SDK
                 // apply call deadlocks 10+ min when the GeneXus IDE holds the
-                // object (or its WWP host) open. Fail fast with a structured
+                // object (or its pattern instance) open. Fail fast with a structured
                 // IdeHoldsLock error instead of hanging the worker thread.
-                string lockReject = TryBuildIdeLockRejection(obj, objectName);
+                string lockReject = TryBuildIdeLockRejection(obj, objectName, pattern);
                 if (lockReject != null) return lockReject;
 
                 return ApplyPatternToObject(obj, patternId, patternKey, settings, reapply: false);
@@ -155,14 +192,21 @@ namespace GxMcp.Worker.Services
         }
 
         /// <summary>
-        /// Re-apply (regenerate) an existing pattern instance on the object.
+        /// Re-apply (regenerate) an existing pattern instance. <paramref name="objectName"/>
+        /// may name the instance itself or its parent object. The pattern comes from the
+        /// existing instance; a supplied <paramref name="patternKey"/> is only validated
+        /// against it. There is no implicit WorkWithPlus default (issue #260).
         /// </summary>
-        public string ReapplyPattern(string objectName, JObject settings = null)
+        public string ReapplyPattern(string objectName, string patternKey, JObject settings = null)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(objectName))
                     return McpResponse.Err(code: "MissingObjectName", message: "Object name is required.", hint: "Pass name=<KBObject name>.", target: objectName);
+
+                PatternManifest requested = null;
+                if (!string.IsNullOrWhiteSpace(patternKey) && !TryResolvePattern(patternKey, out requested))
+                    return PatternUnavailable(patternKey, "Unknown pattern key. Pass an installed pattern name (see availablePatterns), the alias 'WWP', or a pattern GUID.", Registry.Names());
 
                 KBObject obj = ResolveObject(objectName);
                 if (obj == null)
@@ -173,23 +217,307 @@ namespace GxMcp.Worker.Services
                     return McpResponse.Err(code: "ObjectNotFound", message: "Object not found.", hint: "Verify the name with genexus_query.", target: objectName);
                 }
 
+                // The target may be the instance itself: reapply runs on its parent.
+                KBObject parent = obj;
+                var instances = new Dictionary<Guid, object>();
+                var existing = new List<PatternManifest>();
+                PatternManifest selfPattern = Analysis.MatchInstancePattern(obj);
+                if (selfPattern != null)
+                {
+                    parent = PatternAnalysisService.ResolveInstanceParent(obj);
+                    if (parent == null)
+                        return McpResponse.Err(
+                            code: "PatternInstanceParentNotFound",
+                            message: "'" + obj.Name + "' is a " + selfPattern.Name + " instance, but its parent object could not be resolved.",
+                            hint: "Pass the parent object's name instead of the instance name.",
+                            nextSteps: new JArray(McpResponse.NextStep(
+                                tool: "genexus_inspect",
+                                args: new JObject { ["name"] = obj.Name },
+                                why: "Inspect the instance to find the object it belongs to.")),
+                            target: objectName,
+                            extra: new JObject { ["objectName"] = obj.Name, ["pattern"] = selfPattern.Name });
+                    existing.Add(selfPattern);
+                    instances[selfPattern.Id] = obj;
+                }
+                else
+                {
+                    existing.AddRange(FindExistingPatterns(parent, requested, instances));
+                }
+
+                var decision = DecideReapplyPattern(requested, existing, targetIsInstance: selfPattern != null);
+                // No instance of the requested pattern yet: historical contract, run the full
+                // first-apply path (type gate, route gate, IDE lock).
+                if (decision.Status == ReapplyDecisionStatus.FirstApply)
+                    return ApplyPattern(parent.Name, patternKey, settings);
+                if (decision.Status != ReapplyDecisionStatus.Proceed)
+                    return BuildReapplyDecisionError(objectName, obj.Name, decision);
+
+                PatternManifest pattern = decision.Pattern;
+                instances.TryGetValue(pattern.Id, out object knownInstance);
+
+                if (!pattern.IsWorkWithPlus)
+                {
+                    string routeReject = TryBuildRouteUnsupportedRejection(objectName, pattern, PatternRoute.Reapply);
+                    if (routeReject != null) return routeReject;
+                }
+
                 // Friction 2026-05-25 item #6 — IDE lock pre-check. The GeneXus
                 // IDE writes <KB>/Locks/<object-guid>.lock when it opens an
                 // object. The reapply SDK call deadlocks for >10min when the
                 // IDE holds the lock (UpdateParentObject contends on the same
                 // KBObject handle). Fail fast with a structured error rather
                 // than hanging the worker thread indefinitely.
-                string lockReject = TryBuildIdeLockRejection(obj, objectName);
+                string lockReject = TryBuildIdeLockRejection(parent, ReferenceEquals(parent, obj) ? objectName : parent.Name, pattern);
                 if (lockReject != null) return lockReject;
 
-                // For reapply we default to WorkWithPlus until other patterns are wired.
-                return ApplyPatternToObject(obj, WorkWithPlusPatternId, "WorkWithPlus", settings, reapply: true);
+                // WorkWithPlus keeps its historical reapply route unchanged.
+                if (pattern.IsWorkWithPlus)
+                    return ApplyPatternToObject(parent, WorkWithPlusPatternId, "WorkWithPlus", settings, reapply: true);
+                return ApplyPatternToObject(parent, pattern.Id, pattern.Name, settings, reapply: true, knownInstance: knownInstance);
             }
             catch (Exception ex)
             {
                 Logger.Error("PatternApplyService.ReapplyPattern failed: " + ex);
                 return McpResponse.Err(code: "ReapplyPatternFailed", message: ex.Message, hint: "Check the worker log for stack trace details.", target: objectName);
             }
+        }
+
+        // Patterns with an instance on the parent: registered-instance children plus the
+        // engine's PatternInstance.Get(parent, id) for every registered (and requested)
+        // pattern. The first instance object seen per pattern is recorded in `instances`.
+        private List<PatternManifest> FindExistingPatterns(KBObject parent, PatternManifest requested, Dictionary<Guid, object> instances)
+        {
+            var found = new List<PatternManifest>();
+            void Add(PatternManifest m, object instance)
+            {
+                if (m == null || instance == null) return;
+                if (!found.Any(f => f.Id == m.Id)) found.Add(m);
+                if (!instances.ContainsKey(m.Id)) instances[m.Id] = instance;
+            }
+
+            try
+            {
+                foreach (var match in Analysis.FindPatternInstances(parent))
+                    Add(match.Pattern, match.Candidate.Source);
+            }
+            catch (Exception ex) { Logger.Debug("Reapply: instance child walk failed (best-effort): " + ex.Message); }
+
+            var probe = Registry.All.ToList();
+            if (requested != null && !probe.Any(p => p.Id == requested.Id)) probe.Add(requested);
+            foreach (var m in probe)
+            {
+                try { Add(m, _engine.GetPatternInstance(parent, m.Id)); }
+                catch (Exception ex) { Logger.Debug("Reapply: GetPatternInstance(" + m.Name + ") failed (best-effort): " + ex.Message); }
+            }
+            return found;
+        }
+
+        internal enum ReapplyDecisionStatus { Proceed, FirstApply, NotFound, Ambiguous, Mismatch }
+
+        internal sealed class ReapplyDecision
+        {
+            public ReapplyDecisionStatus Status { get; set; }
+            public PatternManifest Pattern { get; set; }
+            public PatternManifest Requested { get; set; }
+            public IReadOnlyList<PatternManifest> Existing { get; set; } = new PatternManifest[0];
+        }
+
+        /// <summary>
+        /// Pure reapply pattern choice (issue #260). <paramref name="existing"/> lists the
+        /// patterns that already have an instance on the target. A requested pattern must be
+        /// one of them; without a request exactly one must exist. Never defaults to WorkWithPlus.
+        /// A requested pattern with no instance on a parent target keeps the historical
+        /// reapply contract and runs as a first apply (<see cref="ReapplyDecisionStatus.FirstApply"/>);
+        /// on an instance target it is a mismatch.
+        /// </summary>
+        internal static ReapplyDecision DecideReapplyPattern(PatternManifest requested, IReadOnlyList<PatternManifest> existing, bool targetIsInstance = false)
+        {
+            var distinct = new List<PatternManifest>();
+            foreach (var m in existing ?? new PatternManifest[0])
+            {
+                if (m != null && !distinct.Any(d => d.Id == m.Id)) distinct.Add(m);
+            }
+
+            var decision = new ReapplyDecision { Requested = requested, Existing = distinct };
+            if (requested != null)
+            {
+                var hit = distinct.FirstOrDefault(m => m.Id == requested.Id);
+                if (hit != null) { decision.Status = ReapplyDecisionStatus.Proceed; decision.Pattern = hit; }
+                else if (!targetIsInstance) { decision.Status = ReapplyDecisionStatus.FirstApply; decision.Pattern = requested; }
+                else decision.Status = ReapplyDecisionStatus.Mismatch;
+                return decision;
+            }
+
+            if (distinct.Count == 1) { decision.Status = ReapplyDecisionStatus.Proceed; decision.Pattern = distinct[0]; }
+            else decision.Status = distinct.Count == 0 ? ReapplyDecisionStatus.NotFound : ReapplyDecisionStatus.Ambiguous;
+            return decision;
+        }
+
+        internal string BuildReapplyDecisionError(string target, string objectName, ReapplyDecision decision)
+        {
+            var existingJson = new JArray(decision.Existing.Select(m => new JObject { ["pattern"] = m.Name, ["patternId"] = m.Id.ToString() }));
+            switch (decision.Status)
+            {
+                case ReapplyDecisionStatus.Mismatch:
+                    return McpResponse.Err(
+                        code: "PatternMismatch",
+                        message: "'" + objectName + "' has no " + decision.Requested.Name + " instance; it has " +
+                                 string.Join(", ", decision.Existing.Select(m => m.Name)) + ".",
+                        hint: "Reapply regenerates the existing instance's own pattern. Pass that pattern or omit 'pattern'.",
+                        nextSteps: new JArray(McpResponse.NextStep(
+                            tool: "genexus_apply_pattern",
+                            args: new JObject { ["name"] = objectName, ["pattern"] = decision.Existing[0].Name, ["reapply"] = true },
+                            why: "Reapply the pattern that owns the existing instance.")),
+                        target: target,
+                        extra: new JObject
+                        {
+                            ["objectName"] = objectName,
+                            ["requestedPattern"] = decision.Requested.Name,
+                            ["requestedPatternId"] = decision.Requested.Id.ToString(),
+                            ["existingPatterns"] = existingJson
+                        });
+                case ReapplyDecisionStatus.Ambiguous:
+                    return McpResponse.Err(
+                        code: "PatternInstanceAmbiguous",
+                        message: "'" + objectName + "' has instances of " + decision.Existing.Count + " patterns; name the pattern to reapply.",
+                        hint: "Pass pattern=<one of candidates>.",
+                        nextSteps: new JArray(McpResponse.NextStep(
+                            tool: "genexus_apply_pattern",
+                            args: new JObject { ["name"] = objectName, ["pattern"] = decision.Existing[0].Name, ["reapply"] = true },
+                            why: "Reapply one named pattern.")),
+                        target: target,
+                        extra: new JObject { ["objectName"] = objectName, ["candidates"] = existingJson });
+                default:
+                    string patternName = decision.Requested?.Name;
+                    var extra = new JObject { ["objectName"] = objectName, ["availablePatterns"] = new JArray(Registry.Names()) };
+                    if (patternName != null) extra["requestedPattern"] = patternName;
+                    return McpResponse.Err(
+                        code: "PatternInstanceNotFound",
+                        message: "'" + objectName + "' has no " + (patternName ?? "registered pattern") + " instance to reapply.",
+                        hint: "Apply the pattern first (without reapply).",
+                        nextSteps: new JArray(McpResponse.NextStep(
+                            tool: "genexus_apply_pattern",
+                            args: new JObject { ["name"] = objectName, ["pattern"] = patternName ?? "(pattern name)" },
+                            why: "First apply creates the pattern instance.")),
+                        target: target,
+                        extra: extra);
+            }
+        }
+
+        internal static bool IsWwpKey(string patternKey)
+        {
+            return string.Equals(patternKey?.Trim(), "WorkWithPlus", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(patternKey?.Trim(), "WWP", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal enum PatternRoute { FirstApply, Reapply }
+
+        /// <summary>
+        /// Which apply routes run for a pattern. WorkWithPlus has its dedicated, supported
+        /// routes. Every other pattern goes through the generic pattern-engine route, gated by
+        /// the two switches below.
+        /// </summary>
+        internal static class PatternRouteCapabilities
+        {
+            // ---------------------------------------------------------------------------
+            // Generic (non-WorkWithPlus) pattern route switches - issue #260.
+            // Flip to false when the live smoke shows the route does not work headless
+            // (e.g. K2BTools documents that K2BEntityServices instances cannot be
+            // initialized or attached to a Transaction outside the IDE). An unsupported
+            // route is rejected with PatternRouteUnsupported before any engine call.
+            // ---------------------------------------------------------------------------
+            internal static bool GenericFirstApplySupported = true;
+            internal static bool GenericReapplySupported = true;
+
+            internal static bool IsSupported(PatternManifest pattern, PatternRoute route, out string reason)
+            {
+                reason = null;
+                if (pattern != null && pattern.IsWorkWithPlus) return true;
+                bool supported = route == PatternRoute.FirstApply ? GenericFirstApplySupported : GenericReapplySupported;
+                if (!supported)
+                    reason = (route == PatternRoute.FirstApply ? "First apply" : "Reapply") + " of " + (pattern?.Name ?? "this pattern") +
+                             " through the pattern engine is not supported by this MCP build.";
+                return supported;
+            }
+
+            internal static JObject ToJson(PatternManifest pattern)
+            {
+                JObject Entry(PatternRoute route)
+                {
+                    bool ok = IsSupported(pattern, route, out string reason);
+                    var e = new JObject { ["supported"] = ok };
+                    if (!ok) e["reason"] = reason;
+                    return e;
+                }
+                return new JObject { ["firstApply"] = Entry(PatternRoute.FirstApply), ["reapply"] = Entry(PatternRoute.Reapply) };
+            }
+        }
+
+        internal static string RouteName(PatternRoute route) => route == PatternRoute.FirstApply ? "firstApply" : "reapply";
+
+        internal static string TryBuildRouteUnsupportedRejection(string target, PatternManifest pattern, PatternRoute route)
+        {
+            if (PatternRouteCapabilities.IsSupported(pattern, route, out string reason)) return null;
+            return McpResponse.Err(
+                code: "PatternRouteUnsupported",
+                message: reason,
+                hint: "Existing " + pattern.Name + " instances can still be read and edited with genexus_read / genexus_edit part=PatternInstance.",
+                nextSteps: new JArray(McpResponse.NextStep(
+                    tool: "genexus_read",
+                    args: new JObject { ["name"] = target, ["part"] = "PatternInstance" },
+                    why: "Read the existing pattern instance instead of applying the pattern.")),
+                target: target,
+                extra: new JObject
+                {
+                    ["pattern"] = pattern.Name,
+                    ["patternId"] = pattern.Id.ToString(),
+                    ["route"] = RouteName(route)
+                });
+        }
+
+        /// <summary>
+        /// Manifest-driven parent-type gate for patterns other than WorkWithPlus (pure).
+        /// Returns the rejection envelope or null. A pattern without an installed manifest
+        /// (bare GUID) declares no parent types, so it is not gated.
+        /// </summary>
+        internal static string TryBuildManifestTypeGateRejection(string objName, string patternKey, PatternManifest pattern, string parentType)
+        {
+            if (pattern == null || pattern.IsWorkWithPlus || string.IsNullOrEmpty(pattern.ManifestPath)) return null;
+            parentType = parentType ?? "";
+            if (!pattern.IsParentless && pattern.AcceptsParentType(parentType)) return null;
+
+            var extra = new JObject
+            {
+                ["patternKey"] = patternKey,
+                ["pattern"] = pattern.Name,
+                ["parentType"] = parentType,
+                ["validParentTypes"] = new JArray(pattern.ParentObjectTypes.ToArray())
+            };
+            if (pattern.IsParentless)
+            {
+                return McpResponse.Err(
+                    code: "PatternParentTypeMismatch",
+                    message: pattern.Name + " has no parent object, so it cannot be applied to an object.",
+                    hint: "Its single instance ('" + (pattern.FormatInstanceName(null) ?? pattern.Name) + "') is edited directly with genexus_read / genexus_edit part=PatternInstance.",
+                    nextSteps: new JArray(McpResponse.NextStep(
+                        tool: "genexus_read",
+                        args: new JObject { ["name"] = pattern.FormatInstanceName(null) ?? pattern.Name, ["part"] = "PatternInstance" },
+                        why: "Read the pattern's instance instead of applying it.")),
+                    target: objName,
+                    extra: extra);
+            }
+
+            string valid = string.Join(", ", pattern.ParentObjectTypes);
+            return McpResponse.Err(
+                code: "PatternParentTypeMismatch",
+                message: pattern.Name + " cannot be applied to a " + (parentType.Length > 0 ? parentType : "object of unknown type") + ".",
+                hint: "Apply " + pattern.Name + " only to: " + valid + ".",
+                nextSteps: new JArray(McpResponse.NextStep(
+                    tool: "genexus_apply_pattern",
+                    args: new JObject { ["name"] = objName, ["pattern"] = patternKey },
+                    why: "Call on a " + valid + " instead.")),
+                target: objName,
+                extra: extra);
         }
 
         /// <summary>
@@ -199,7 +527,7 @@ namespace GxMcp.Worker.Services
         /// host (WorkWithPlus&lt;Name&gt;). Best-effort: any I/O failure logs
         /// and returns null so the SDK call proceeds.
         /// </summary>
-        internal string TryBuildIdeLockRejection(KBObject parent, string objectName)
+        internal string TryBuildIdeLockRejection(KBObject parent, string objectName, PatternManifest pattern = null)
         {
             try
             {
@@ -245,12 +573,28 @@ namespace GxMcp.Worker.Services
 
                 Probe(parent, "parent");
 
-                // Probe the WWP host too: WorkWithPlus<Name> is the conventional naming.
-                if (_objectService != null && !string.IsNullOrEmpty(parent?.Name))
+                if (pattern == null || pattern.IsWorkWithPlus)
                 {
-                    var hostName = "WorkWithPlus" + parent.Name;
-                    var host = _objectService.FindObject(hostName);
-                    Probe(host, "wwpHost");
+                    // Probe the WWP host too: WorkWithPlus<Name> is the conventional naming.
+                    if (_objectService != null && !string.IsNullOrEmpty(parent?.Name))
+                    {
+                        var hostName = "WorkWithPlus" + parent.Name;
+                        var host = _objectService.FindObject(hostName);
+                        Probe(host, "wwpHost");
+                    }
+                }
+                else if (parent != null)
+                {
+                    // Other patterns: probe the instance the engine associates with the
+                    // parent, else the object named by the manifest's instance template.
+                    KBObject instanceObj = null;
+                    try { instanceObj = _engine.GetPatternInstance(parent, pattern.Id) as KBObject; } catch { /* best-effort */ }
+                    if (instanceObj == null && _objectService != null)
+                    {
+                        string instanceName = pattern.FormatInstanceName(parent.Name);
+                        if (!string.IsNullOrWhiteSpace(instanceName)) instanceObj = _objectService.FindObject(instanceName);
+                    }
+                    Probe(instanceObj, "patternHost");
                 }
 
                 if (hits.Count == 0) return null;
@@ -290,8 +634,13 @@ namespace GxMcp.Worker.Services
             return GxMcp.Worker.Helpers.WwpApplyOnSaveHelper.TryEnable(host);
         }
 
-        internal string ApplyPatternToObject(KBObject obj, Guid patternId, string patternKey, JObject settings, bool reapply, string objectNameForResponse = null)
+        internal string ApplyPatternToObject(KBObject obj, Guid patternId, string patternKey, JObject settings, bool reapply, string objectNameForResponse = null, object knownInstance = null)
         {
+            // Route by pattern identity, not by the key spelling: every WorkWithPlus key
+            // (name, alias, GUID) takes the WorkWithPlus route below.
+            if (patternId != WorkWithPlusPatternId)
+                return ApplyGenericPatternToObject(obj, ManifestFor(patternId), patternKey, settings, reapply, objectNameForResponse, knownInstance);
+
             var phaseTimer = System.Diagnostics.Stopwatch.StartNew();
             var phases = new System.Collections.Generic.List<string>();
             void Phase(string name) { phases.Add($"{name}={phaseTimer.ElapsedMilliseconds}ms"); phaseTimer.Restart(); }
@@ -338,8 +687,7 @@ namespace GxMcp.Worker.Services
             // minimalist PatternInstance (empty <table/>). Treat a missing host as
             // first-apply so the engine regenerates the family.
             bool staleInstanceRecovered = false;
-            if (existingInstance != null && _objectService != null && !string.IsNullOrEmpty(obj?.Name)
-                && string.Equals(patternKey, "WorkWithPlus", StringComparison.OrdinalIgnoreCase))
+            if (existingInstance != null && _objectService != null && !string.IsNullOrEmpty(obj?.Name))
             {
                 try
                 {
@@ -806,6 +1154,142 @@ namespace GxMcp.Worker.Services
 
             // Re-attach SDK path tag and return.
             var canonicalObj = JObject.Parse(canonicalJson);
+            GxMcp.Worker.Helpers.WriteResultMeta.TagSdkPath(canonicalObj, GxMcp.Worker.Helpers.WriteResultMeta.SdkPatternEngine);
+            return canonicalObj.ToString(Newtonsoft.Json.Formatting.None);
+        }
+
+        /// <summary>
+        /// Generic pattern-engine route for every pattern other than WorkWithPlus (issue #260):
+        /// no WorkWithPlus projection, apply-on-save, template discovery, family lookup or
+        /// package attach. First apply calls the engine and then requires the instance to
+        /// exist; an existing instance is regenerated through the engine's reapply overload.
+        /// </summary>
+        private string ApplyGenericPatternToObject(KBObject obj, PatternManifest pattern, string patternKey, JObject settings, bool reapply, string objectNameForResponse, object knownInstance)
+        {
+            string targetName = objectNameForResponse ?? obj?.Name ?? "";
+            string key = string.IsNullOrWhiteSpace(patternKey) ? pattern.Name : patternKey;
+
+            object patternDefinition = _engine.GetPatternDefinition(pattern.Id);
+            if (patternDefinition == null)
+                return PatternUnavailable(key, pattern.Name + " pattern not loaded - check license / package install");
+
+            object existingInstance = null;
+            try { existingInstance = _engine.GetPatternInstance(obj, pattern.Id); }
+            catch (Exception ex) { Logger.Debug("ApplyPattern: GetPatternInstance(" + pattern.Name + ") failed (best-effort): " + ex.Message); }
+            if (existingInstance == null) existingInstance = knownInstance;
+
+            var route = existingInstance != null ? PatternRoute.Reapply : PatternRoute.FirstApply;
+            string routeReject = TryBuildRouteUnsupportedRejection(targetName, pattern, route);
+            if (routeReject != null) return routeReject;
+
+            PatternApplyResult result;
+            bool wasFirstApply;
+            try
+            {
+                if (existingInstance != null)
+                {
+                    result = TryReapplyWithFallback(existingInstance, obj, patternDefinition, settings, out wasFirstApply);
+                }
+                else
+                {
+                    result = _engine.ApplyPattern(obj, patternDefinition, settings);
+                    wasFirstApply = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PatternEngine " + RouteName(route) + " failed for '" + targetName + "' (" + pattern.Name + "): " + ex);
+                return McpResponse.Err(
+                    code: "PatternEngineApplyFailed",
+                    message: ex.Message,
+                    hint: "Verify the " + pattern.Name + " package is installed and licensed and the KB is open.",
+                    nextSteps: new JArray(McpResponse.NextStep(
+                        tool: "genexus_apply_pattern",
+                        args: new JObject { ["name"] = targetName, ["pattern"] = key, ["mode"] = "diagnose" },
+                        why: "Run the read-only preflight to check the pattern and target state.")),
+                    target: targetName,
+                    extra: new JObject { ["patternKey"] = key, ["pattern"] = pattern.Name, ["route"] = RouteName(route) });
+            }
+
+            // Resolve the instance object: the engine association first, then the object
+            // named by the manifest's instance template.
+            object instance = existingInstance;
+            if (instance == null)
+            {
+                try { instance = _engine.GetPatternInstance(obj, pattern.Id); }
+                catch (Exception ex) { Logger.Debug("ApplyPattern: post-apply GetPatternInstance failed (best-effort): " + ex.Message); }
+            }
+            string instanceName = (instance as KBObject)?.Name;
+            KBObject instanceObj = instance as KBObject;
+            if (instanceObj == null && _objectService != null)
+            {
+                string expected = pattern.FormatInstanceName(obj?.Name ?? targetName);
+                if (!string.IsNullOrWhiteSpace(expected))
+                {
+                    try { instanceObj = _objectService.FindObject(expected); } catch { /* best-effort */ }
+                    if (instanceObj != null) instanceName = instanceObj.Name;
+                }
+            }
+            if (instanceName == null && instance != null)
+                instanceName = pattern.FormatInstanceName(obj?.Name ?? targetName);
+
+            if (instance == null && instanceObj == null)
+            {
+                return McpResponse.Err(
+                    code: "PatternNoOp",
+                    message: "The pattern engine returned without creating a " + pattern.Name + " instance for '" + targetName + "'.",
+                    hint: "This pattern may require the GeneXus IDE to create its first instance. Apply it in the IDE, then reapply or edit it here.",
+                    nextSteps: new JArray(McpResponse.NextStep(
+                        tool: "genexus_apply_pattern",
+                        args: new JObject { ["name"] = targetName, ["pattern"] = key, ["mode"] = "diagnose" },
+                        why: "Run the read-only preflight to check the target and pattern state.")),
+                    target: targetName,
+                    extra: new JObject { ["patternKey"] = key, ["pattern"] = pattern.Name, ["patternId"] = pattern.Id.ToString(), ["route"] = RouteName(route) });
+            }
+
+            var generated = new List<string>();
+            if (!string.IsNullOrEmpty(instanceName)) generated.Add(instanceName);
+            foreach (var name in result?.GeneratedObjects ?? Enumerable.Empty<string>())
+            {
+                if (!string.IsNullOrEmpty(name) && !generated.Contains(name, StringComparer.OrdinalIgnoreCase)) generated.Add(name);
+            }
+
+            // Keep the search index in sync with the instance and any reported objects.
+            if (_objectService != null && generated.Count > 0)
+            {
+                try
+                {
+                    var idx = _objectService.GetKbService()?.GetIndexCache();
+                    if (idx != null)
+                    {
+                        foreach (var name in generated)
+                        {
+                            try
+                            {
+                                var o = _objectService.FindObject(name);
+                                if (o != null) idx.UpdateEntry(o);
+                            }
+                            catch { /* per-name best-effort */ }
+                        }
+                    }
+                }
+                catch (Exception ex) { Logger.Debug("ApplyPattern: index UpdateEntry sweep skipped: " + ex.Message); }
+            }
+
+            var patternResult = new JObject
+            {
+                ["parentType"] = obj?.TypeDescriptor?.Name ?? "",
+                ["bindingMode"] = "pattern-engine",
+                ["patternKey"] = key,
+                ["patternName"] = pattern.Name,
+                ["patternId"] = pattern.Id.ToString(),
+                ["wasFirstApply"] = wasFirstApply,
+                ["generatedObjects"] = new JArray(generated),
+                ["errors"] = new JArray(result?.Errors ?? Enumerable.Empty<string>())
+            };
+            if (!string.IsNullOrEmpty(instanceName)) patternResult["patternHost"] = instanceName;
+
+            var canonicalObj = JObject.Parse(McpResponse.Ok(target: targetName, code: "PatternApplied", result: patternResult));
             GxMcp.Worker.Helpers.WriteResultMeta.TagSdkPath(canonicalObj, GxMcp.Worker.Helpers.WriteResultMeta.SdkPatternEngine);
             return canonicalObj.ToString(Newtonsoft.Json.Formatting.None);
         }
@@ -2142,13 +2626,7 @@ namespace GxMcp.Worker.Services
             }
         }
 
-        private static bool TryResolvePatternId(string patternKey, out Guid id)
-        {
-            if (KnownPatterns.TryGetValue(patternKey.Trim(), out id)) return true;
-            return Guid.TryParse(patternKey.Trim(), out id);
-        }
-
-        private static string PatternUnavailable(string patternKey, string message)
+        private static string PatternUnavailable(string patternKey, string message, IEnumerable<string> availablePatterns = null)
         {
             var j = new JObject
             {
@@ -2156,6 +2634,7 @@ namespace GxMcp.Worker.Services
                 ["patternKey"] = patternKey,
                 ["message"] = message
             };
+            if (availablePatterns != null) j["availablePatterns"] = new JArray(availablePatterns);
             return j.ToString(Newtonsoft.Json.Formatting.None);
         }
 
@@ -2195,23 +2674,30 @@ namespace GxMcp.Worker.Services
                 }
 
                 // ── 2. Pattern resolution ────────────────────────────────────────
-                if (!TryResolvePatternId(patternKey, out Guid patternId))
+                if (!TryResolvePattern(patternKey, out PatternManifest pattern))
                 {
-                    findings.Add(Finding("templateInvalid", "critical",
-                        $"Unknown pattern key '{patternKey}'. Not in known-patterns registry and not a valid GUID.",
-                        "Use 'WorkWithPlus' (or alias 'WWP') or supply a raw pattern GUID."));
+                    var unknown = Finding("templateInvalid", "critical",
+                        $"Unknown pattern key '{patternKey}'. Not an installed pattern and not a valid GUID.",
+                        "Use an installed pattern name (see availablePatterns), the alias 'WWP', or a raw pattern GUID.");
+                    unknown["availablePatterns"] = new JArray(Registry.Names());
+                    findings.Add(unknown);
                     return DiagnoseResponse(objectName, patternKey, findings);
                 }
+                JObject patternJson = pattern.ToJson();
 
                 // ── 3. Engine / license availability ────────────────────────────
                 object patternDef = null;
-                try { patternDef = _engine.GetPatternDefinition(patternId); } catch { }
+                try { patternDef = _engine.GetPatternDefinition(pattern.Id); } catch { }
                 if (patternDef == null)
                 {
-                    findings.Add(Finding("templateInvalid", "critical",
-                        "Pattern engine returned null for the given pattern GUID — package probably not installed or license inactive.",
-                        "Verify the WorkWithPlus package is present in GeneXus\\Packages\\Patterns\\WorkWithPlus\\. Check license activation."));
-                    return DiagnoseResponse(objectName, patternKey, findings);
+                    findings.Add(pattern.IsWorkWithPlus
+                        ? Finding("templateInvalid", "critical",
+                            "Pattern engine returned null for the given pattern GUID — package probably not installed or license inactive.",
+                            "Verify the WorkWithPlus package is present in GeneXus\\Packages\\Patterns\\WorkWithPlus\\. Check license activation.")
+                        : Finding("templateInvalid", "critical",
+                            "Pattern engine returned null for " + pattern.Name + " - the package is probably not installed or its license is inactive.",
+                            "Verify the " + pattern.Name + " package is present under GeneXus\\Packages\\Patterns and licensed."));
+                    return DiagnoseResponse(objectName, patternKey, findings, patternJson);
                 }
 
                 // ── 4. Object resolution ─────────────────────────────────────────
@@ -2221,21 +2707,51 @@ namespace GxMcp.Worker.Services
                     findings.Add(Finding("missingRequiredAttribute", "critical",
                         $"Object '{objectName}' not found in the KB.",
                         "Verify the name with genexus_query or genexus_list_objects."));
-                    return DiagnoseResponse(objectName, patternKey, findings);
+                    return DiagnoseResponse(objectName, patternKey, findings, patternJson);
                 }
 
-                string parentType = obj.TypeDescriptor?.Name ?? "";
+                return DiagnoseForObject(obj.Name, obj, obj.TypeDescriptor?.Name ?? "", patternKey, pattern, settings, findings);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PatternApplyService.DiagnosePattern failed: " + ex);
+                return McpResponse.Err(code: "DiagnosePatternFailed", message: ex.Message, hint: "Check the worker log for stack trace details.", nextSteps: new JArray(McpResponse.NextStep("genexus_apply_pattern", new JObject { ["name"] = objectName }, "Retry the apply directly if diagnosis is consistently failing.")), target: objectName);
+            }
+        }
+
+        // Diagnose checks that need the resolved target. Split out so the checks are
+        // unit-testable with a null KBObject (the fake engine never dereferences it).
+        internal string DiagnoseForObject(string objectName, KBObject obj, string parentType, string patternKey, PatternManifest pattern, JObject settings, JArray findings)
+        {
+            {
+                findings = findings ?? new JArray();
+                parentType = parentType ?? "";
+                bool isWwp = pattern.IsWorkWithPlus;
+                Guid patternId = pattern.Id;
 
                 // ── 5. Parent-type gate ──────────────────────────────────────────
                 string callerTemplate = settings?["template"]?.ToString();
                 List<string> availableTemplates = null;
-                bool isWebPanelKind = IsWwpDirectAttachParentType(parentType);
+                bool isWebPanelKind = isWwp && IsWwpDirectAttachParentType(parentType);
                 if (isWebPanelKind)
                 {
                     try { availableTemplates = ListWwpWebTemplates(); } catch { availableTemplates = new List<string>(); }
                 }
 
-                string typeGateReject = TryBuildTypeGateRejection(obj.Name, patternKey, parentType, callerTemplate, availableTemplates);
+                string typeGateReject = isWwp
+                    ? TryBuildTypeGateRejection(objectName, IsWwpKey(patternKey) ? patternKey : "WorkWithPlus", parentType, callerTemplate, availableTemplates)
+                    : null;
+                if (!isWwp)
+                {
+                    string manifestReject = TryBuildManifestTypeGateRejection(objectName, patternKey, pattern, parentType);
+                    if (manifestReject != null)
+                    {
+                        var env = JObject.Parse(manifestReject);
+                        findings.Add(Finding("parentTypeMismatch", "critical",
+                            env["error"]?["message"]?.ToString() ?? (pattern.Name + " cannot be applied to this object."),
+                            env["error"]?["hint"]?.ToString() ?? ("Apply " + pattern.Name + " only to a supported parent object type.")));
+                    }
+                }
                 if (typeGateReject != null)
                 {
                     var rejectEnv = JObject.Parse(typeGateReject);
@@ -2255,9 +2771,26 @@ namespace GxMcp.Worker.Services
                 try { existingInstance = _engine.GetPatternInstance(obj, patternId); } catch { }
                 if (existingInstance != null)
                 {
-                    findings.Add(Finding("overrideConflict", "warn",
-                        $"An existing PatternInstance for '{patternKey}' was found on '{objectName}'. A first-apply will be a no-op; use reapply=true.",
-                        "Call genexus_apply_pattern with reapply=true to regenerate the existing pattern instance."));
+                    findings.Add(isWwp
+                        ? Finding("overrideConflict", "warn",
+                            $"An existing PatternInstance for '{patternKey}' was found on '{objectName}'. A first-apply will be a no-op; use reapply=true.",
+                            "Call genexus_apply_pattern with reapply=true to regenerate the existing pattern instance.")
+                        : Finding("overrideConflict", "warn",
+                            $"An existing {pattern.Name} instance was found on '{objectName}'. Applying again regenerates it through the reapply route.",
+                            "Call genexus_apply_pattern with reapply=true to regenerate the existing pattern instance."));
+                }
+
+                // ── 6b. Route capability (patterns other than WorkWithPlus) ──────
+                // Report the route that would actually run instead of claiming a clean
+                // apply and then failing on an unsupported path.
+                var route = existingInstance != null ? PatternRoute.Reapply : PatternRoute.FirstApply;
+                if (!PatternRouteCapabilities.IsSupported(pattern, route, out string routeReason))
+                {
+                    var routeFinding = Finding("routeUnsupported", "critical",
+                        routeReason,
+                        "Existing " + pattern.Name + " instances can be read and edited with genexus_read / genexus_edit part=PatternInstance.");
+                    routeFinding["route"] = RouteName(route);
+                    findings.Add(routeFinding);
                 }
 
                 // ── 7. WWP package environment / ACL preflight ───────────────────
@@ -2335,12 +2868,8 @@ namespace GxMcp.Worker.Services
                             : "Call genexus_apply_pattern to proceed."));
                 }
 
-                return DiagnoseResponse(obj.Name, patternKey, findings);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("PatternApplyService.DiagnosePattern failed: " + ex);
-                return McpResponse.Err(code: "DiagnosePatternFailed", message: ex.Message, hint: "Check the worker log for stack trace details.", nextSteps: new JArray(McpResponse.NextStep("genexus_apply_pattern", new JObject { ["name"] = objectName }, "Retry the apply directly if diagnosis is consistently failing.")), target: objectName);
+                return DiagnoseResponse(objectName, patternKey, findings, pattern.ToJson(),
+                    isWwp ? null : PatternRouteCapabilities.ToJson(pattern));
             }
         }
 
@@ -2357,7 +2886,7 @@ namespace GxMcp.Worker.Services
             };
         }
 
-        private static string DiagnoseResponse(string target, string patternKey, JArray findings)
+        private static string DiagnoseResponse(string target, string patternKey, JArray findings, JObject pattern = null, JObject routeCapabilities = null)
         {
             var hasAnyOk = findings.Any(f => f["reason"]?.ToString() == "ok");
             var hasCritical = findings.Any(f => f["severity"]?.ToString() == "critical");
@@ -2369,6 +2898,8 @@ namespace GxMcp.Worker.Services
                 ["patternKey"] = patternKey ?? "",
                 ["findings"] = findings
             };
+            if (pattern != null) resp["pattern"] = pattern;
+            if (routeCapabilities != null) resp["routeCapabilities"] = routeCapabilities;
             return resp.ToString(Newtonsoft.Json.Formatting.None);
         }
     }

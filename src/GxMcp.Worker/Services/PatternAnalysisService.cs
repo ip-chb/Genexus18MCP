@@ -326,6 +326,96 @@ namespace GxMcp.Worker.Services
             return PatternInstanceSelection.NotFound(null);
         }
 
+        /// <summary>
+        /// Registered pattern instances among <paramref name="candidates"/> (pure). Candidates
+        /// whose type is not a registered pattern are skipped; duplicate name/pattern pairs collapse.
+        /// </summary>
+        internal static IReadOnlyList<PatternInstanceMatch> MatchPatternInstances(
+            IEnumerable<PatternInstanceCandidate> candidates,
+            PatternRegistry registry)
+        {
+            registry = registry ?? new PatternRegistry(null);
+            var matches = new List<PatternInstanceMatch>();
+            foreach (var candidate in candidates ?? Enumerable.Empty<PatternInstanceCandidate>())
+            {
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.Name)) continue;
+                var pattern = registry.MatchInstanceType(candidate.TypeName, candidate.TypeGuid);
+                if (pattern == null) continue;
+                if (matches.Any(m => m.Pattern.Id == pattern.Id &&
+                                     string.Equals(m.Candidate.Name, candidate.Name, StringComparison.OrdinalIgnoreCase))) continue;
+                matches.Add(new PatternInstanceMatch(candidate, pattern));
+            }
+            return matches;
+        }
+
+        /// <summary>
+        /// Pattern instances related to <paramref name="obj"/>: the object itself when it is a
+        /// registered pattern instance, otherwise its registered-instance children.
+        /// </summary>
+        internal IReadOnlyList<PatternInstanceMatch> FindPatternInstances(KBObject obj)
+        {
+            if (obj == null) return new PatternInstanceMatch[0];
+            var registry = Registry;
+            var own = MatchPatternInstances(new[] { ToCandidate(obj) }, registry);
+            if (own.Count > 0) return own;
+
+            var children = new List<PatternInstanceCandidate>();
+            try
+            {
+                var model = obj.Model;
+                if (model != null)
+                {
+                    foreach (KBObject child in model.Objects.GetChildren(obj))
+                    {
+                        if (child != null) children.Add(ToCandidate(child));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug("[PatternResolve] child walk failed for " + obj.Name + ": " + ex.Message);
+            }
+            return MatchPatternInstances(children, registry);
+        }
+
+        /// <summary>
+        /// Object a pattern instance belongs to. The SDK's PatternInstance exposes it as the
+        /// <c>KBObject</c> property; <see cref="KBObject.Parent"/> is the fallback because
+        /// instances are children of their parent object. Folders and modules are not parents.
+        /// </summary>
+        internal static KBObject ResolveInstanceParent(KBObject instance)
+        {
+            if (instance == null) return null;
+            try
+            {
+                var prop = instance.GetType().GetProperty("KBObject", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                if (prop != null && typeof(KBObject).IsAssignableFrom(prop.PropertyType) && prop.GetIndexParameters().Length == 0)
+                {
+                    if (prop.GetValue(instance) is KBObject owner && !ReferenceEquals(owner, instance) && owner.Guid != instance.Guid)
+                        return owner;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug("[PatternResolve] PatternInstance.KBObject read failed for " + instance.Name + ": " + ex.Message);
+            }
+
+            try
+            {
+                var parent = instance.Parent;
+                string parentType = parent?.TypeDescriptor?.Name;
+                if (parent == null ||
+                    string.Equals(parentType, "Folder", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(parentType, "Module", StringComparison.OrdinalIgnoreCase))
+                    return null;
+                return parent;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private static PatternInstanceMatch PreferTemplateNamed(List<PatternInstanceMatch> ofPattern, PatternManifest pattern, string parentName)
         {
             if (ofPattern.Count == 0) return null;

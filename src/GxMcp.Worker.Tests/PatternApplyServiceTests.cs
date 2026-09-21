@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Artech.Architecture.Common.Objects;
 using GxMcp.Worker.Services;
 using Newtonsoft.Json.Linq;
@@ -36,14 +37,33 @@ namespace GxMcp.Worker.Tests
         {
             public object DefinitionToReturn { get; set; } = new object();
             public object ExistingInstance { get; set; }
+            // Per-pattern overrides; ids absent from these maps use the defaults above.
+            public Dictionary<Guid, object> DefinitionsById { get; } = new Dictionary<Guid, object>();
+            public Dictionary<Guid, object> InstancesById { get; } = new Dictionary<Guid, object>();
+            // Returned by GetPatternInstance once ApplyPattern ran (models the engine creating the instance).
+            public object InstanceAfterApply { get; set; }
             public Func<JObject, PatternApplyResult> ApplyImpl { get; set; }
             public Func<JObject, PatternApplyResult> ReapplyImpl { get; set; }
 
             public int ApplyCalls;
             public int ReapplyCalls;
+            public Guid? LastDefinitionPatternId;
+            public Guid? LastInstancePatternId;
+            public readonly List<Guid> DefinitionRequests = new List<Guid>();
 
-            public object GetPatternDefinition(Guid patternId) => DefinitionToReturn;
-            public object GetPatternInstance(KBObject parent, Guid patternId) => ExistingInstance;
+            public object GetPatternDefinition(Guid patternId)
+            {
+                LastDefinitionPatternId = patternId;
+                DefinitionRequests.Add(patternId);
+                return DefinitionsById.TryGetValue(patternId, out var d) ? d : DefinitionToReturn;
+            }
+
+            public object GetPatternInstance(KBObject parent, Guid patternId)
+            {
+                LastInstancePatternId = patternId;
+                if (ApplyCalls > 0 && InstanceAfterApply != null) return InstanceAfterApply;
+                return InstancesById.TryGetValue(patternId, out var i) ? i : ExistingInstance;
+            }
 
             public PatternApplyResult ApplyPattern(KBObject parent, object patternDefinition, JObject settings)
             {
@@ -68,6 +88,358 @@ namespace GxMcp.Worker.Tests
         private static PatternApplyService MakeService(IPatternEngineAdapter engine, KBObject objToReturn)
         {
             return new PatternApplyService(null, engine, name => objToReturn);
+        }
+
+        // ── Issue #260: generic (non-WorkWithPlus) pattern routes ──────────────────
+        private static readonly Guid K2BEntityServicesId = new Guid("589d4b49-e3f9-4d49-aaf4-fad023028eb1");
+
+        private const string EntityServicesManifest =
+            "<Pattern Publisher=\"K2B\" Id=\"589d4b49-e3f9-4d49-aaf4-fad023028eb1\" Name=\"K2BEntityServices\" Version=\"13.1.1.15262\">" +
+            "<Definition><InstanceName>K2BEntityServices{0}</InstanceName>" +
+            "<ParentObjects><ParentObject Type=\"Transaction\"></ParentObject></ParentObjects></Definition></Pattern>";
+
+        private static PatternRegistry K2BRegistry() => new PatternRegistry(new[]
+        {
+            PatternRegistry.ParseManifest(EntityServicesManifest, "es.Pattern")
+        });
+
+        private static PatternApplyService MakeK2BService(FakeEngine engine) =>
+            new PatternApplyService(null, engine, name => null, K2BRegistry());
+
+        private static PatternManifest K2B(PatternRegistry registry)
+        {
+            Assert.True(registry.TryResolve("K2BEntityServices", out var m));
+            return m;
+        }
+
+        private static void WithRoutes(bool firstApply, bool reapply, Action body)
+        {
+            bool oldFirst = PatternApplyService.PatternRouteCapabilities.GenericFirstApplySupported;
+            bool oldReapply = PatternApplyService.PatternRouteCapabilities.GenericReapplySupported;
+            try
+            {
+                PatternApplyService.PatternRouteCapabilities.GenericFirstApplySupported = firstApply;
+                PatternApplyService.PatternRouteCapabilities.GenericReapplySupported = reapply;
+                body();
+            }
+            finally
+            {
+                PatternApplyService.PatternRouteCapabilities.GenericFirstApplySupported = oldFirst;
+                PatternApplyService.PatternRouteCapabilities.GenericReapplySupported = oldReapply;
+            }
+        }
+
+        [Fact]
+        public void K2BName_ResolvesThroughInjectedRegistry_AndUsesGenericRoute()
+        {
+            var engine = new FakeEngine { InstanceAfterApply = new object() };
+            var svc = MakeK2BService(engine);
+
+            string json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: false, objectNameForResponse: ObjName);
+            var obj = JObject.Parse(json);
+
+            Assert.Equal("ok", obj["status"]?.ToString());
+            Assert.Equal("pattern-engine", obj["result"]?["bindingMode"]?.ToString());
+            Assert.Equal("K2BEntityServices", obj["result"]?["patternName"]?.ToString());
+            Assert.Equal(K2BEntityServicesId.ToString(), obj["result"]?["patternId"]?.ToString());
+            Assert.Equal("K2BEntityServices" + ObjName, obj["result"]?["patternHost"]?.ToString());
+            Assert.True(obj["result"]?["wasFirstApply"]?.ToObject<bool>());
+            Assert.Equal(1, engine.ApplyCalls);
+            Assert.DoesNotContain(WWP, engine.DefinitionRequests);
+            Assert.DoesNotContain("WorkWithPlus", json);
+        }
+
+        [Fact]
+        public void GenericFirstApply_NoInstanceAfterEngine_ReturnsPatternNoOp()
+        {
+            var engine = new FakeEngine();
+            var svc = MakeK2BService(engine);
+
+            var obj = JObject.Parse(svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: false, objectNameForResponse: ObjName));
+
+            Assert.Equal("error", obj["status"]?.ToString());
+            Assert.Equal("PatternNoOp", obj["error"]?["code"]?.ToString() ?? obj["code"]?.ToString());
+            Assert.DoesNotContain("WorkWithPlus", obj.ToString());
+        }
+
+        [Fact]
+        public void GenericReapply_UsesEngineReapply_AndNeverTouchesWwpId()
+        {
+            var engine = new FakeEngine();
+            engine.InstancesById[K2BEntityServicesId] = new object();
+            var svc = MakeK2BService(engine);
+
+            string json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: true, objectNameForResponse: ObjName);
+            var obj = JObject.Parse(json);
+
+            Assert.Equal("ok", obj["status"]?.ToString());
+            Assert.False(obj["result"]?["wasFirstApply"]?.ToObject<bool>());
+            Assert.Equal(1, engine.ReapplyCalls);
+            Assert.Equal(0, engine.ApplyCalls);
+            Assert.Equal(K2BEntityServicesId, engine.LastDefinitionPatternId);
+            Assert.Equal(K2BEntityServicesId, engine.LastInstancePatternId);
+            Assert.DoesNotContain(WWP, engine.DefinitionRequests);
+            Assert.DoesNotContain("WorkWithPlus", json);
+        }
+
+        [Fact]
+        public void UnknownKey_ListsAvailablePatterns()
+        {
+            var svc = MakeK2BService(new FakeEngine());
+
+            var obj = JObject.Parse(svc.ApplyPattern(ObjName, "NotARealPatternKey"));
+
+            Assert.Equal("pattern_unavailable", obj["status"]?.ToString());
+            Assert.Equal("NotARealPatternKey", obj["patternKey"]?.ToString());
+            var available = obj["availablePatterns"]!.ToObject<List<string>>();
+            Assert.Contains("K2BEntityServices", available);
+            Assert.Contains("WorkWithPlus", available);
+        }
+
+        [Fact]
+        public void Reapply_UnknownKey_ListsAvailablePatterns()
+        {
+            var svc = MakeK2BService(new FakeEngine());
+
+            var obj = JObject.Parse(svc.ReapplyPattern(ObjName, "NotARealPatternKey"));
+
+            Assert.Equal("pattern_unavailable", obj["status"]?.ToString());
+            Assert.Contains("K2BEntityServices", obj["availablePatterns"]!.ToObject<List<string>>());
+        }
+
+        [Fact]
+        public void GenericNullDefinition_NamesThePattern_WithoutWorkWithPlusText()
+        {
+            var engine = new FakeEngine();
+            engine.DefinitionsById[K2BEntityServicesId] = null;
+            var svc = MakeK2BService(engine);
+
+            string json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: false, objectNameForResponse: ObjName);
+            var obj = JObject.Parse(json);
+
+            Assert.Equal("pattern_unavailable", obj["status"]?.ToString());
+            Assert.Contains("K2BEntityServices", obj["message"]?.ToString());
+            Assert.Contains("license", obj["message"]?.ToString() ?? "", StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("WorkWithPlus", json);
+            Assert.Equal(0, engine.ApplyCalls);
+        }
+
+        [Fact]
+        public void GenericFirstApply_RouteOff_ReturnsPatternRouteUnsupported_BeforeEngine()
+        {
+            WithRoutes(firstApply: false, reapply: true, () =>
+            {
+                var engine = new FakeEngine { InstanceAfterApply = new object() };
+                var svc = MakeK2BService(engine);
+
+                var obj = JObject.Parse(svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: false, objectNameForResponse: ObjName));
+
+                Assert.Equal("error", obj["status"]?.ToString());
+                Assert.Contains("PatternRouteUnsupported", obj.ToString());
+                Assert.Equal("firstApply", obj["route"]?.ToString());
+                Assert.Contains("K2BEntityServices", obj["error"]?["message"]?.ToString());
+                Assert.Equal(0, engine.ApplyCalls);
+                Assert.Equal(0, engine.ReapplyCalls);
+            });
+        }
+
+        [Fact]
+        public void GenericReapply_RouteOff_ReturnsPatternRouteUnsupported_BeforeEngine()
+        {
+            WithRoutes(firstApply: true, reapply: false, () =>
+            {
+                var engine = new FakeEngine();
+                engine.InstancesById[K2BEntityServicesId] = new object();
+                var svc = MakeK2BService(engine);
+
+                var obj = JObject.Parse(svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: true, objectNameForResponse: ObjName));
+
+                Assert.Contains("PatternRouteUnsupported", obj.ToString());
+                Assert.Equal("reapply", obj["route"]?.ToString());
+                Assert.Equal(0, engine.ReapplyCalls);
+                Assert.Equal(0, engine.ApplyCalls);
+            });
+        }
+
+        [Fact]
+        public void WwpRoute_IgnoresGenericRouteSwitches()
+        {
+            WithRoutes(firstApply: false, reapply: false, () =>
+            {
+                var engine = new FakeEngine();
+                var svc = MakeK2BService(engine);
+
+                var obj = JObject.Parse(svc.ApplyPatternToObject(null, WWP, "WWP", null, reapply: false, objectNameForResponse: ObjName));
+
+                Assert.Equal("ok", obj["status"]?.ToString());
+                Assert.Equal(1, engine.ApplyCalls);
+            });
+        }
+
+        [Fact]
+        public void Diagnose_K2B_ReportsPatternAndNoWorkWithPlusText()
+        {
+            var registry = K2BRegistry();
+            var engine = new FakeEngine();
+            var svc = new PatternApplyService(null, engine, name => null, registry);
+
+            string json = svc.DiagnoseForObject(ObjName, null, "Transaction", "K2BEntityServices", K2B(registry), null, null);
+            var obj = JObject.Parse(json);
+
+            Assert.Equal("ok", obj["status"]?.ToString());
+            Assert.Equal("K2BEntityServices", obj["pattern"]?["name"]?.ToString());
+            Assert.True(obj["routeCapabilities"]?["firstApply"]?["supported"]?.ToObject<bool>());
+            Assert.DoesNotContain("WorkWithPlus", json);
+            Assert.DoesNotContain("WWP", json);
+        }
+
+        [Fact]
+        public void Diagnose_K2B_WrongParentType_IsBlocked()
+        {
+            var registry = K2BRegistry();
+            var svc = new PatternApplyService(null, new FakeEngine(), name => null, registry);
+
+            var obj = JObject.Parse(svc.DiagnoseForObject("MyPanel", null, "WebPanel", "K2BEntityServices", K2B(registry), null, null));
+
+            Assert.Equal("blocked", obj["status"]?.ToString());
+            Assert.Contains(obj["findings"]!, f => f["reason"]?.ToString() == "parentTypeMismatch");
+            Assert.DoesNotContain(obj["findings"]!, f => f["reason"]?.ToString() == "ok");
+            Assert.DoesNotContain("WorkWithPlus", obj.ToString());
+        }
+
+        [Fact]
+        public void Diagnose_K2B_RouteOff_ReportsRouteUnsupportedInsteadOfOk()
+        {
+            WithRoutes(firstApply: true, reapply: false, () =>
+            {
+                var registry = K2BRegistry();
+                var engine = new FakeEngine();
+                engine.InstancesById[K2BEntityServicesId] = new object();
+                var svc = new PatternApplyService(null, engine, name => null, registry);
+
+                var obj = JObject.Parse(svc.DiagnoseForObject(ObjName, null, "Transaction", "K2BEntityServices", K2B(registry), null, null));
+
+                Assert.Equal("blocked", obj["status"]?.ToString());
+                var route = ((JArray)obj["findings"]!).First(f =>f["reason"]?.ToString() == "routeUnsupported");
+                Assert.Equal("critical", route["severity"]?.ToString());
+                Assert.Equal("reapply", route["route"]?.ToString());
+                Assert.DoesNotContain("should apply cleanly", obj.ToString());
+                Assert.DoesNotContain("WorkWithPlus", obj.ToString());
+            });
+        }
+
+        [Fact]
+        public void Diagnose_K2B_NullDefinition_RemediationNamesPackage()
+        {
+            var engine = new FakeEngine();
+            engine.DefinitionsById[K2BEntityServicesId] = null;
+            var svc = MakeK2BService(engine);
+
+            string json = svc.DiagnosePattern(ObjName, "K2BEntityServices");
+            var obj = JObject.Parse(json);
+
+            Assert.Equal("blocked", obj["status"]?.ToString());
+            Assert.Contains("Verify the K2BEntityServices package is present under GeneXus\\Packages\\Patterns and licensed", json.Replace("\\\\", "\\"));
+            Assert.Equal("K2BEntityServices", obj["pattern"]?["name"]?.ToString());
+            Assert.DoesNotContain("WorkWithPlus", json);
+        }
+
+        [Fact]
+        public void Diagnose_Wwp_KeepsWorkWithPlusFindings()
+        {
+            var svc = MakeK2BService(new FakeEngine { ExistingInstance = new object() });
+            var registry = K2BRegistry();
+            Assert.True(registry.TryResolve("WorkWithPlus", out var wwp));
+
+            var obj = JObject.Parse(svc.DiagnoseForObject(ObjName, null, "Transaction", "WorkWithPlus", wwp, null, null));
+
+            Assert.Equal("ok", obj["status"]?.ToString());
+            var conflict = ((JArray)obj["findings"]!).First(f =>f["reason"]?.ToString() == "overrideConflict");
+            Assert.Contains("A first-apply will be a no-op", conflict["detail"]?.ToString());
+            Assert.Null(obj["routeCapabilities"]);
+        }
+
+        [Fact]
+        public void DecideReapply_RequestedMatchesExisting_Proceeds()
+        {
+            var registry = K2BRegistry();
+            var k2b = K2B(registry);
+            var d = PatternApplyService.DecideReapplyPattern(k2b, new[] { k2b });
+            Assert.Equal(PatternApplyService.ReapplyDecisionStatus.Proceed, d.Status);
+            Assert.Same(k2b, d.Pattern);
+        }
+
+        [Fact]
+        public void DecideReapply_RequestedDiffersFromExisting_IsMismatch()
+        {
+            var registry = K2BRegistry();
+            Assert.True(registry.TryResolve("WWP", out var wwp));
+            var d = PatternApplyService.DecideReapplyPattern(wwp, new[] { K2B(registry) }, targetIsInstance: true);
+            Assert.Equal(PatternApplyService.ReapplyDecisionStatus.Mismatch, d.Status);
+            Assert.Null(d.Pattern);
+        }
+
+        [Fact]
+        public void DecideReapply_RequestedWithoutInstanceOnParent_RunsAsFirstApply()
+        {
+            var registry = K2BRegistry();
+            var k2b = K2B(registry);
+
+            var none = PatternApplyService.DecideReapplyPattern(k2b, new PatternManifest[0]);
+            Assert.Equal(PatternApplyService.ReapplyDecisionStatus.FirstApply, none.Status);
+            Assert.Same(k2b, none.Pattern);
+
+            registry.TryResolve("WWP", out var wwp);
+            var other = PatternApplyService.DecideReapplyPattern(k2b, new[] { wwp });
+            Assert.Equal(PatternApplyService.ReapplyDecisionStatus.FirstApply, other.Status);
+        }
+
+        [Fact]
+        public void DecideReapply_NoInstance_IsNotFound_NeverWwpDefault()
+        {
+            var d = PatternApplyService.DecideReapplyPattern(null, new PatternManifest[0]);
+            Assert.Equal(PatternApplyService.ReapplyDecisionStatus.NotFound, d.Status);
+            Assert.Null(d.Pattern);
+        }
+
+        [Fact]
+        public void DecideReapply_SingleExistingWithoutKey_UsesInstancePattern()
+        {
+            var registry = K2BRegistry();
+            var d = PatternApplyService.DecideReapplyPattern(null, new[] { K2B(registry), K2B(registry) });
+            Assert.Equal(PatternApplyService.ReapplyDecisionStatus.Proceed, d.Status);
+            Assert.Equal(K2BEntityServicesId, d.Pattern.Id);
+        }
+
+        [Fact]
+        public void DecideReapply_SeveralWithoutKey_IsAmbiguous()
+        {
+            var registry = K2BRegistry();
+            Assert.True(registry.TryResolve("WWP", out var wwp));
+            var d = PatternApplyService.DecideReapplyPattern(null, new[] { K2B(registry), wwp });
+            Assert.Equal(PatternApplyService.ReapplyDecisionStatus.Ambiguous, d.Status);
+            Assert.Equal(2, d.Existing.Count);
+        }
+
+        [Fact]
+        public void ReapplyDecisionErrors_UseCanonicalCodes()
+        {
+            var registry = K2BRegistry();
+            Assert.True(registry.TryResolve("WWP", out var wwp));
+            var k2b = K2B(registry);
+            var svc = new PatternApplyService(null, new FakeEngine(), name => null, registry);
+
+            var mismatch = JObject.Parse(svc.BuildReapplyDecisionError(ObjName, ObjName, PatternApplyService.DecideReapplyPattern(wwp, new[] { k2b }, targetIsInstance: true)));
+            Assert.Contains("PatternMismatch", mismatch.ToString());
+            Assert.Equal("K2BEntityServices", mismatch["existingPatterns"]![0]!["pattern"]?.ToString());
+
+            var ambiguous = JObject.Parse(svc.BuildReapplyDecisionError(ObjName, ObjName, PatternApplyService.DecideReapplyPattern(null, new[] { k2b, wwp })));
+            Assert.Contains("PatternInstanceAmbiguous", ambiguous.ToString());
+            Assert.Equal(2, ((JArray)ambiguous["candidates"]!).Count);
+
+            var none = JObject.Parse(svc.BuildReapplyDecisionError(ObjName, ObjName, PatternApplyService.DecideReapplyPattern(null, new PatternManifest[0])));
+            Assert.Contains("PatternInstanceNotFound", none.ToString());
+            Assert.Contains("K2BEntityServices", none["availablePatterns"]!.ToObject<List<string>>());
         }
 
         [Fact]

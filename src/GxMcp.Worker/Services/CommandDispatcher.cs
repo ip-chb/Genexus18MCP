@@ -2283,7 +2283,7 @@ namespace GxMcp.Worker.Services
                 bool reapply = args?["reapply"]?.ToObject<bool?>() ?? false;
                 var patSettings = args?["settings"] as JObject;
                 string patKey = args?["pattern"]?.ToString();
-                if (reapply) return _patternApplyService.ReapplyPattern(target, patSettings);
+                if (reapply) return _patternApplyService.ReapplyPattern(target, patKey, patSettings);
                 return _patternApplyService.ApplyPattern(target, patKey, patSettings);
             }
             if (action == "Diagnose")
