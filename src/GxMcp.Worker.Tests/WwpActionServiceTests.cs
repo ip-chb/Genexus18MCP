@@ -529,5 +529,33 @@ namespace GxMcp.Worker.Tests
             }
             throw new FileNotFoundException("Could not locate " + fileName + " starting from " + AppDomain.CurrentDomain.BaseDirectory);
         }
+        [Fact]
+        public void WwpInstanceNotFound_ParentOfWwpInstance_PointsToTheInstanceInsteadOfEditingIt()
+        {
+            var registry = new PatternRegistry(new PatternManifest[0]);
+            var detected = new[]
+            {
+                new PatternInstanceMatch(new PatternInstanceCandidate("WorkWithPlusCustomer", "WorkWithPlus", Guid.Empty),
+                    registry.FindById(PatternRegistry.WorkWithPlusPatternId))
+            };
+
+            var env = JObject.Parse(WwpActionService.BuildWwpInstanceNotFound("Customer", "Customer", "Transaction", detected));
+
+            Assert.Equal("WWPInstanceNotFound", env["error"]?["code"]?.ToString());
+            Assert.Contains("WorkWithPlusCustomer", env["error"]?["message"]?.ToString());
+            var next = env["error"]?["nextSteps"]?[0];
+            Assert.Equal("genexus_wwp", next?["tool"]?.ToString());
+            Assert.Equal("WorkWithPlusCustomer", next?["args"]?["name"]?.ToString());
+        }
+        [Fact]
+        public void Run_UntypedLookupOnlyExplainsTheError_NeverReachesMutation_ViaConvention()
+        {
+            // Issue #260 review: an untyped homonym must never be edited by genexus_wwp.
+            string source = File.ReadAllText(Path.Combine(TestFixtures.FindRepoRoot(),
+                "src", "GxMcp.Worker", "Services", "WwpActionService.cs"));
+
+            Assert.Contains("return BuildWwpInstanceNotFound(target, existing);", source);
+            Assert.DoesNotContain("requestedObject = _objects.FindObject(\n                        target,\n                        guid:", source.Replace("\r\n", "\n"));
+        }
     }
 }

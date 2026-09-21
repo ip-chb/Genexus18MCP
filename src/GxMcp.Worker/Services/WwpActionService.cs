@@ -54,11 +54,18 @@ namespace GxMcp.Worker.Services
                 ["pattern"] = m.Pattern.Name
             }));
 
-            string message = others.Count > 0
+            var wwp = detected.FirstOrDefault(m => m.Pattern.IsWorkWithPlus);
+            string message = wwp != null
+                ? "'" + objectName + "' is not a WorkWithPlus instance; name its WorkWithPlus instance '" + wwp.Candidate.Name + "'."
+                : others.Count > 0
                 ? "'" + objectName + "' has no editable WorkWithPlus PatternInstance; it has " +
                   string.Join(", ", others.Select(m => m.Pattern.Name + " instance '" + m.Candidate.Name + "'")) + "."
                 : "No editable WorkWithPlus PatternInstance was resolved for this object.";
-            JArray nextSteps = others.Count > 0
+            JArray nextSteps = wwp != null
+                ? new JArray(McpResponse.NextStep("genexus_wwp",
+                    new JObject { ["action"] = "list", ["name"] = wwp.Candidate.Name },
+                    "genexus_wwp edits the WorkWithPlus instance itself."))
+                : others.Count > 0
                 ? new JArray(McpResponse.NextStep("genexus_read",
                     new JObject { ["name"] = others[0].Candidate.Name, ["part"] = "PatternInstance" },
                     "Read the " + others[0].Pattern.Name + " instance; genexus_edit part=PatternInstance edits it."))
@@ -108,12 +115,15 @@ namespace GxMcp.Worker.Services
                 if (requestedObject == null)
                 {
                     // The typed lookup only sees WorkWithPlus instances. An existing object of
-                    // another type (a parent, or an instance of another pattern) is resolved
-                    // untyped so the caller learns why it cannot be edited here (issue #260).
-                    requestedObject = _objects.FindObject(
+                    // another type (a parent, or an instance of another pattern) is looked up
+                    // untyped ONLY to explain why it cannot be edited here (issue #260); it never
+                    // reaches the mutation path, so an untyped homonym is still never edited.
+                    var existing = _objects.FindObject(
                         target,
                         guid: (string)args?["guid"],
                         entityKey: (string)args?["entityKey"]);
+                    if (existing != null)
+                        return BuildWwpInstanceNotFound(target, existing);
                 }
                 if (requestedObject == null)
                     return McpResponse.Err(code: "ObjectNotFound", message: "Object not found.", target: target,

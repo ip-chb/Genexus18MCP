@@ -1598,9 +1598,19 @@ namespace GxMcp.Worker.Services
                 // PatternAnalysisService so patch-mode can read & rewrite pattern XML.
                 if (_patternAnalysisService != null && PatternAnalysisService.IsPatternPart(resolvedPart))
                 {
-                    string patternXml = _patternAnalysisService.ReadPatternPartXmlFresh(obj, resolvedPart, out _, out var resolvedPatternPartName);
+                    string patternXml = _patternAnalysisService.ReadPatternPartXmlFresh(obj, resolvedPart, null, out _, out var resolvedPatternPartName, out JObject patternDiagnostic);
                     if (patternXml == null)
                     {
+                        // Several pattern instances on the target: surface the candidates like
+                        // genexus_read and full-mode genexus_edit do (issue #260).
+                        if (patternDiagnostic?["code"] != null)
+                            return Models.McpResponse.Err(
+                                code: patternDiagnostic["code"].ToString(),
+                                message: patternDiagnostic["message"]?.ToString() ?? "The pattern instance to patch is ambiguous.",
+                                hint: "Name the pattern instance to patch; each candidate is a separate instance.",
+                                target: target,
+                                errorExtra: patternDiagnostic);
+
                         var freshDiagnostic = _objectService.GetLastResolutionDiagnostic();
                         if (string.Equals(freshDiagnostic?["code"]?.ToString(), "FreshReadUnavailable", StringComparison.OrdinalIgnoreCase))
                         {

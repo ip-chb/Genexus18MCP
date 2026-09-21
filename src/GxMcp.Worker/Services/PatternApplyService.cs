@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -311,8 +311,9 @@ namespace GxMcp.Worker.Services
             }
             catch (Exception ex) { Logger.Debug("Reapply: instance child walk failed (best-effort): " + ex.Message); }
 
-            var probe = Registry.All.ToList();
-            if (requested != null && !probe.Any(p => p.Id == requested.Id)) probe.Add(requested);
+            // With a requested pattern only its instance matters (the child walk above still
+            // lists the others); probing every registered pattern costs one SDK call each.
+            var probe = requested != null ? new List<PatternManifest> { requested } : Registry.All.ToList();
             foreach (var m in probe)
             {
                 try
@@ -921,6 +922,7 @@ namespace GxMcp.Worker.Services
                 ["generatedObjects"] = new JArray(generated),
                 ["errors"] = new JArray(result?.Errors ?? Enumerable.Empty<string>())
             };
+            if (!string.IsNullOrEmpty(result?.EngineRoute)) patternResult["engineRoute"] = result.EngineRoute;
             JArray patternWarnings = null;
             if (patternValidationIssues != null)
             {
@@ -1304,6 +1306,7 @@ namespace GxMcp.Worker.Services
                 ["generatedObjects"] = new JArray(generated),
                 ["errors"] = new JArray(result?.Errors ?? Enumerable.Empty<string>())
             };
+            if (!string.IsNullOrEmpty(result?.EngineRoute)) patternResult["engineRoute"] = result.EngineRoute;
             if (!string.IsNullOrEmpty(instanceName)) patternResult["patternHost"] = instanceName;
 
             var canonicalObj = JObject.Parse(McpResponse.Ok(target: targetName, code: "PatternApplied", result: patternResult));
@@ -2641,6 +2644,18 @@ namespace GxMcp.Worker.Services
                 wasFirstApply = false;
                 return result;
             }
+            catch (NullReferenceException ex)
+            {
+                // The reapply overload needs IDE services a headless Worker lacks and throws
+                // NRE (observed for K2BEntityServices on GX17 U4, and the reason the WWP route
+                // skips it). The first-apply overload re-applies an existing instance.
+                Logger.Info("PatternEngine reapply overload threw NRE (" + ex.Message + ") - falling back to first-apply overload.");
+                var result = _engine.ApplyPattern(parent, patternDefinition, settings) ?? new PatternApplyResult();
+                // Surfaced so callers know the reapply overload failed before this route ran.
+                result.EngineRoute = "apply-overload-after-reapply-nre";
+                wasFirstApply = false;
+                return result;
+            }
         }
 
         private static string PatternUnavailable(string patternKey, string message, IEnumerable<string> availablePatterns = null)
@@ -2725,6 +2740,13 @@ namespace GxMcp.Worker.Services
                         $"Object '{objectName}' not found in the KB.",
                         "Verify the name with genexus_query or genexus_list_objects."));
                     return DiagnoseResponse(objectName, patternKey, findings, patternJson);
+                }
+
+                // An instance target is diagnosed on its parent, the object apply/reapply acts on.
+                if (!pattern.IsWorkWithPlus && Analysis.MatchInstancePattern(obj) != null)
+                {
+                    var owner = PatternAnalysisService.ResolveInstanceParent(obj);
+                    if (owner != null) obj = owner;
                 }
 
                 return DiagnoseForObject(obj.Name, obj, obj.TypeDescriptor?.Name ?? "", patternKey, pattern, settings, findings);

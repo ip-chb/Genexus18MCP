@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Artech.Architecture.Common.Objects;
@@ -160,6 +160,24 @@ namespace GxMcp.Worker.Tests
             Assert.Equal("error", obj["status"]?.ToString());
             Assert.Equal("PatternNoOp", obj["error"]?["code"]?.ToString() ?? obj["code"]?.ToString());
             Assert.DoesNotContain("WorkWithPlus", obj.ToString());
+        }
+
+        [Fact]
+        public void GenericReapply_ReapplyOverloadNre_FallsBackToApplyOverload()
+        {
+            // Live GX17 U4 + K2BEntityServices: the reapply overload throws NRE headless.
+            var engine = new FakeEngine { ReapplyImpl = _ => throw new NullReferenceException("headless") };
+            engine.InstancesById[K2BEntityServicesId] = new object();
+            var svc = MakeK2BService(engine);
+
+            string json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: true, objectNameForResponse: ObjName);
+            var obj = JObject.Parse(json);
+
+            Assert.Equal("ok", obj["status"]?.ToString());
+            Assert.False(obj["result"]?["wasFirstApply"]?.ToObject<bool>());
+            Assert.Equal(1, engine.ReapplyCalls);
+            Assert.Equal(1, engine.ApplyCalls);
+            Assert.Equal("apply-overload-after-reapply-nre", obj["result"]?["engineRoute"]?.ToString());
         }
 
         [Fact]
