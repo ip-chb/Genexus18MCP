@@ -264,6 +264,15 @@ namespace GxMcp.Worker.Services
                 if (!TryReadCompleteSource(currentResponse, out JObject readJson, out originalSource, out string readError))
                 {
                     string readCode = TryExtractErrorCode(currentResponse);
+                    var readFailureExtra = new JObject
+                    {
+                        ["readCode"] = readCode,
+                        ["readCompleted"] = false,
+                        ["readError"] = readError
+                    };
+                    // Issue #260: a parent with several pattern instances names them.
+                    var readCandidates = TryExtractErrorField(currentResponse, "candidates");
+                    if (readCandidates != null) readFailureExtra["candidates"] = readCandidates;
                     return Models.McpResponse.Err(
                         // Keep the patch API's stable top-level failure contract while
                         // retaining the more specific read diagnosis for callers that
@@ -276,12 +285,7 @@ namespace GxMcp.Worker.Services
                             args: new JObject { ["name"] = target, ["part"] = partName },
                             why: "Verify the part is accessible and not truncated before patching.")),
                         target: target,
-                        extra: new JObject
-                        {
-                            ["readCode"] = readCode,
-                            ["readCompleted"] = false,
-                            ["readError"] = readError
-                        });
+                        extra: readFailureExtra);
                 }
 
                 snapshotVersion = readJson["versionToken"]?.ToString();
@@ -1860,6 +1864,19 @@ namespace GxMcp.Worker.Services
             catch (Exception ex)
             {
                 error = ex.Message;
+                return null;
+            }
+        }
+
+        private static JToken TryExtractErrorField(string response, string field)
+        {
+            try
+            {
+                var json = JObject.Parse(response);
+                return json[field] ?? json["error"]?[field];
+            }
+            catch
+            {
                 return null;
             }
         }
