@@ -118,6 +118,17 @@ namespace GxMcp.Worker.Tests
         }
 
         [Fact]
+        public void ExplicitPatternId_DoesNotSelectExpectedNameWithUnrelatedType()
+        {
+            var homonym = new PatternInstanceCandidate("K2BEntityServicesCustomer", "Transaction", TransactionTypeId);
+            var sel = PatternAnalysisService.SelectPatternInstance(
+                Trn("Customer"), new[] { homonym }, EntityServicesId, Registry());
+
+            Assert.Equal(PatternInstanceSelectionStatus.NotFound, sel.Status);
+            Assert.Null(sel.Selected);
+        }
+
+        [Fact]
         public void ExplicitWorkWithPlusId_NeverResolvesAK2BInstance()
         {
             var sel = PatternAnalysisService.SelectPatternInstance(

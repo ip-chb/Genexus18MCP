@@ -144,6 +144,45 @@ public class SearchRouter {
         with self.assertRaises(MODULE.ContractError):
             MODULE.validate_descriptions([tool])
 
+    def test_line_layout_accepts_one_tool_per_line(self):
+        lines = ["["]
+        tools = []
+        for index in range(3):
+            tool = {"name": f"tool_{index}", "inputSchema": {"type": "object"}}
+            tools.append(tool)
+            suffix = "," if index < 2 else ""
+            lines.append(f'  {json.dumps(tool, separators=(",", ":"))}{suffix}')
+        lines.append("]")
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "tool_definitions.json"
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            counts = MODULE.validate_line_layout(path, len(tools))
+            self.assertEqual(len(tools), counts["lines"])
+
+    def test_line_layout_rejects_reformatted_document(self):
+        document = json.loads(
+            (ROOT / "src" / "GxMcp.Gateway" / "tool_definitions.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        pretty = json.dumps(document, indent=2, ensure_ascii=False)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "tool_definitions.json"
+            path.write_text(pretty + "\n", encoding="utf-8")
+            with self.assertRaises(MODULE.ContractError):
+                MODULE.validate_line_layout(path, len(document))
+
+    def test_repository_line_layout_is_valid(self):
+        document = json.loads(
+            (ROOT / "src" / "GxMcp.Gateway" / "tool_definitions.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        counts = MODULE.validate_line_layout(
+            ROOT / "src" / "GxMcp.Gateway" / "tool_definitions.json", len(document)
+        )
+        self.assertEqual(len(document), counts["lines"])
+
 
 if __name__ == "__main__":
     unittest.main()

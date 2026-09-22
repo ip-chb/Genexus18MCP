@@ -379,6 +379,54 @@ namespace GxMcp.Gateway.Tests
             Assert.False(OperationClassifier.IsReadOnly("genexus_versioning", new JObject { ["action"] = "undo" }));
         }
 
+        [Theory]
+        [InlineData("install")]
+        [InlineData("install_builtin")]
+        [InlineData("update")]
+        public void ModuleInstallActionsRespectPreviewBoundary(string action)
+        {
+            Assert.True(OperationClassifier.IsReadOnly("genexus_module", new JObject
+            {
+                ["action"] = action,
+                ["dryRun"] = true
+            }));
+            Assert.False(OperationClassifier.IsReadOnly("genexus_module", new JObject
+            {
+                ["action"] = action,
+                ["dryRun"] = false
+            }));
+            Assert.False(OperationClassifier.IsMutationCandidate("genexus_module", new JObject
+            {
+                ["action"] = action,
+                ["dryRun"] = true
+            }));
+        }
+
+        [Fact]
+        public void IoImportPartRespectsPreviewBoundary()
+        {
+            Assert.True(OperationClassifier.IsReadOnly("genexus_io", new JObject
+            {
+                ["action"] = "import_part",
+                ["dryRun"] = true
+            }));
+            Assert.False(OperationClassifier.IsReadOnly("genexus_io", new JObject
+            {
+                ["action"] = "import_part",
+                ["dryRun"] = false
+            }));
+            Assert.False(OperationClassifier.IsMutationCandidate("genexus_io", new JObject
+            {
+                ["action"] = "import_part",
+                ["dryRun"] = true
+            }));
+            Assert.True(OperationClassifier.IsMutationCandidate("genexus_io", new JObject
+            {
+                ["action"] = "import_part",
+                ["dryRun"] = false
+            }));
+        }
+
         [Fact]
         public void DocumentedDryRunActions_AreReadOnlyOnlyWhenPreviewing()
         {

@@ -80,6 +80,75 @@ namespace GxMcp.Worker.Tests
             => Assert.Equal("[dbo]]; DROP TABLE Users;--].[Order]",
                 QuoteIdentifier("dbo]; DROP TABLE Users;--.Order", "sqlserver"));
 
+        [Theory]
+        [InlineData("sqlserver")]
+        [InlineData("mssql")]
+        public void ConnectionUnavailableHint_ForSqlServer_RecommendsAlias(string family)
+        {
+            string hint = BuildConnectionUnavailableHint(family);
+
+            Assert.Contains("dataStoreAlias", hint);
+            Assert.DoesNotContain("support SQL Server only", hint);
+        }
+
+        [Theory]
+        [InlineData("postgres")]
+        [InlineData("oracle")]
+        [InlineData("mysql")]
+        public void ConnectionUnavailableHint_ForNonSqlServer_DoesNotRecommendAlias(string family)
+        {
+            string hint = BuildConnectionUnavailableHint(family);
+
+            Assert.DoesNotContain("dataStoreAlias", hint);
+            Assert.Contains("support SQL Server only", hint);
+            Assert.Contains(family, hint);
+        }
+
+        [Fact]
+        public void ProfileAlias_ForPostgresDatastore_IsRejectedAsUnsupported()
+        {
+            var alias = new TransactionRecordsService.ProfileDataStoreAlias
+            {
+                Alias = "pg",
+                DataStore = "Default",
+                Family = "postgres"
+            };
+
+            var ex = Assert.Throws<TransactionRecordsService.RecordOperationException>(
+                () => ValidateProfileAliasFamily("postgres", alias));
+
+            Assert.Equal("DataStoreAliasProviderUnsupported", ex.Code);
+        }
+
+        [Fact]
+        public void ProfileAlias_ForSqlServerDatastore_PassesFamilyValidation()
+        {
+            var alias = new TransactionRecordsService.ProfileDataStoreAlias
+            {
+                Alias = "production",
+                DataStore = "Default",
+                Family = "sqlserver"
+            };
+
+            ValidateProfileAliasFamily("sqlserver", alias);
+        }
+
+        [Fact]
+        public void ProfileAlias_FamilyMismatch_IsRejectedBeforeProviderCheck()
+        {
+            var alias = new TransactionRecordsService.ProfileDataStoreAlias
+            {
+                Alias = "production",
+                DataStore = "Default",
+                Family = "postgres"
+            };
+
+            var ex = Assert.Throws<TransactionRecordsService.RecordOperationException>(
+                () => ValidateProfileAliasFamily("sqlserver", alias));
+
+            Assert.Equal("DataStoreAliasFamilyMismatch", ex.Code);
+        }
+
         [Fact]
         public void ProfileAliasKbCatalogMapPreservesStringPathScope()
         {

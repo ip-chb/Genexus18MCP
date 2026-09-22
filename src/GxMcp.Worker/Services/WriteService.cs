@@ -440,7 +440,7 @@ namespace GxMcp.Worker.Services
             // writers — returning `new object()` gave each caller its own lock and
             // silently disabled the per-target serialization this method exists for.
             // Route them through a shared sentinel key instead.
-            string key = string.IsNullOrWhiteSpace(target) ? " <empty-target>" : target;
+            string key = string.IsNullOrWhiteSpace(target) ? "\x00<empty-target>" : target;
             return _perTargetLocks.GetOrAdd(key, _ => new object());
         }
 

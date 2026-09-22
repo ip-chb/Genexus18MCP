@@ -61,5 +61,24 @@ namespace GxMcp.Worker.Tests
             }
             finally { File.Delete(tmp); }
         }
+
+        [Fact]
+        public void ImportObjectFromText_DryRun_MissingObject_PreviewsWithoutCreating()
+        {
+            var obj = BuildIsolatedObjectService();
+            string tmp = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(tmp, "some source");
+                string result = obj.ImportObjectFromText("NoSuchObject", tmp, dryRun: true);
+                var json = JObject.Parse(result);
+
+                Assert.Equal("error", json["status"]?.ToString());
+                Assert.Equal("ObjectNotFound", json["error"]?["code"]?.ToString());
+                Assert.Contains("dry-run", json["error"]?["message"]?.ToString());
+                Assert.False(json["persisted"]?.ToObject<bool?>() ?? true);
+            }
+            finally { File.Delete(tmp); }
+        }
     }
 }

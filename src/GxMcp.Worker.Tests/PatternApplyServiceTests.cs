@@ -130,7 +130,7 @@ namespace GxMcp.Worker.Tests
         }
 
         [Fact]
-        public void K2BName_ResolvesThroughInjectedRegistry_AndUsesGenericRoute()
+        public void K2BName_UsesGenericRoute_ButUnverifiedEngineObjectDoesNotCountAsSuccess()
         {
             var engine = new FakeEngine { InstanceAfterApply = new object() };
             var svc = MakeK2BService(engine);
@@ -138,12 +138,8 @@ namespace GxMcp.Worker.Tests
             string json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: false, objectNameForResponse: ObjName);
             var obj = JObject.Parse(json);
 
-            Assert.Equal("ok", obj["status"]?.ToString());
-            Assert.Equal("pattern-engine", obj["result"]?["bindingMode"]?.ToString());
-            Assert.Equal("K2BEntityServices", obj["result"]?["patternName"]?.ToString());
-            Assert.Equal(K2BEntityServicesId.ToString(), obj["result"]?["patternId"]?.ToString());
-            Assert.Equal("K2BEntityServices" + ObjName, obj["result"]?["patternHost"]?.ToString());
-            Assert.True(obj["result"]?["wasFirstApply"]?.ToObject<bool>());
+            Assert.Equal("error", obj["status"]?.ToString());
+            Assert.Equal("PatternNoOp", obj["error"]?["code"]?.ToString() ?? obj["code"]?.ToString());
             Assert.Equal(1, engine.ApplyCalls);
             Assert.DoesNotContain(WWP, engine.DefinitionRequests);
             Assert.DoesNotContain("WorkWithPlus", json);
@@ -179,7 +175,7 @@ namespace GxMcp.Worker.Tests
             Assert.Equal(0, engine.ApplyCalls);
         }
         [Fact]
-        public void GenericReapply_WhenEnabled_UsesEngineReapply_AndNeverTouchesWwpId()
+        public void GenericReapply_WhenEnabled_RequiresResolvedInstance_AndNeverTouchesWwpId()
         {
             var engine = new FakeEngine();
             engine.InstancesById[K2BEntityServicesId] = new object();
@@ -189,8 +185,8 @@ namespace GxMcp.Worker.Tests
             WithRoutes(firstApply: true, reapply: true, () => json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: true, objectNameForResponse: ObjName));
             var obj = JObject.Parse(json);
 
-            Assert.Equal("ok", obj["status"]?.ToString());
-            Assert.False(obj["result"]?["wasFirstApply"]?.ToObject<bool>());
+            Assert.Equal("error", obj["status"]?.ToString());
+            Assert.Equal("PatternNoOp", obj["error"]?["code"]?.ToString() ?? obj["code"]?.ToString());
             Assert.Equal(1, engine.ReapplyCalls);
             Assert.Equal(0, engine.ApplyCalls);
             Assert.Equal(K2BEntityServicesId, engine.LastDefinitionPatternId);

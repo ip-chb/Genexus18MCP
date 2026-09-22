@@ -1235,29 +1235,12 @@ namespace GxMcp.Worker.Services
                     extra: new JObject { ["patternKey"] = key, ["pattern"] = pattern.Name, ["route"] = RouteName(route) });
             }
 
-            // Resolve the instance object: the engine association first, then the object
-            // named by the manifest's instance template.
-            object instance = existingInstance;
-            if (instance == null)
-            {
-                try { instance = _engine.GetPatternInstance(obj, pattern.Id); }
-                catch (Exception ex) { Logger.Debug("ApplyPattern: post-apply GetPatternInstance failed (best-effort): " + ex.Message); }
-            }
-            string instanceName = (instance as KBObject)?.Name;
-            KBObject instanceObj = instance as KBObject;
-            if (instanceObj == null && _objectService != null)
-            {
-                string expected = pattern.FormatInstanceName(obj?.Name ?? targetName);
-                if (!string.IsNullOrWhiteSpace(expected))
-                {
-                    try { instanceObj = _objectService.FindObject(expected); } catch { /* best-effort */ }
-                    if (instanceObj != null) instanceName = instanceObj.Name;
-                }
-            }
-            if (instanceName == null && instance != null)
-                instanceName = pattern.FormatInstanceName(obj?.Name ?? targetName);
+            // Resolve through the typed registry path. A raw name lookup can find an
+            // unrelated homonym and must not be treated as proof that apply succeeded.
+            KBObject instanceObj = Analysis.ResolvePatternInstance(obj, pattern.Id, fresh: true, out _);
+            string instanceName = instanceObj?.Name;
 
-            if (instance == null && instanceObj == null)
+            if (instanceObj == null)
             {
                 return McpResponse.Err(
                     code: "PatternNoOp",

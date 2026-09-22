@@ -79,7 +79,9 @@ namespace GxMcp.Gateway.Routers
                         target = args?["name"]?.ToString(),
                         inputPath = args?["inputPath"]?.ToString(),
                         part = args?["part"]?.ToString(),
-                        type = args?["type"]?.ToString()
+                        type = args?["type"]?.ToString(),
+                        dryRun = args?["dryRun"]?.ToObject<bool?>() ?? false,
+                        forceSave = args?["forceSave"]?.ToObject<bool?>() ?? false
                     };
 
                 case "export_kb_to_text":

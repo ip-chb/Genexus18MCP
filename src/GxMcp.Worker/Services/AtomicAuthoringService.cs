@@ -89,7 +89,16 @@ namespace GxMcp.Worker.Services
                             JObject variable = item as JObject;
                             if (variable == null) { normalizedVariables.Add(item.DeepClone()); continue; }
                             variable = (JObject)variable.DeepClone();
-                            if (variable["typeName"] == null && variable["basedOn"] != null)
+                            if (variable["typeName"] == null && variable["basedOnAttribute"] != null)
+                            {
+                                string attrName = variable["basedOnAttribute"].ToString().Trim();
+                                if (VariableInjector.TryParseAttributeReference(attrName, out string parsedAttr))
+                                    attrName = parsedAttr;
+                                else
+                                    attrName = attrName.TrimStart('&');
+                                variable["typeName"] = "Attribute:" + attrName;
+                            }
+                            else if (variable["typeName"] == null && variable["basedOn"] != null)
                                 variable["typeName"] = variable["basedOn"].DeepClone();
                             normalizedVariables.Add(variable);
                         }
@@ -211,14 +220,34 @@ namespace GxMcp.Worker.Services
             AddTextPreflightDiagnostic(errors, args?["name"]?.ToString(), "source", JoinText(args?["source"]));
             foreach (JObject variable in (args?["variables"] as JArray ?? new JArray()).OfType<JObject>())
             {
-                string typeName = (variable["basedOn"] ?? variable["typeName"])?.ToString();
+                string typeName = (variable["basedOnAttribute"] ?? variable["basedOn"] ?? variable["typeName"])?.ToString();
                 if (string.IsNullOrWhiteSpace((variable["name"] ?? variable["varName"])?.ToString()))
                     errors.Add(Diagnostic("MissingVariableName", args?["name"]?.ToString(), "variables", "A variable is missing name/varName."));
                 if (!string.IsNullOrWhiteSpace(typeName))
                 {
+                    // issue #281: Attribute references ("Attribute:X" or bare
+                    // basedOnAttribute) are validated against the KB, not the
+                    // primitive synonym table.
+                    string attrCheck = typeName.Trim();
+                    if (VariableInjector.TryParseAttributeReference(attrCheck, out string parsedAttrCheck))
+                        attrCheck = parsedAttrCheck;
+                    else if (variable["basedOnAttribute"] != null)
+                        attrCheck = attrCheck.TrimStart('&');
+                    bool isAttrRef = VariableInjector.TryParseAttributeReference(typeName, out _)
+                        || variable["basedOnAttribute"] != null;
+                    if (isAttrRef)
+                    {
+                        if (_objects.FindObject(attrCheck) == null)
+                            errors.Add(Diagnostic("ReferencedTypeNotFound", args?["name"]?.ToString(), typeName, "Referenced Attribute was not found."));
+                        continue;
+                    }
                     var resolution = VariableTypeResolver.Resolve(typeName);
                     if (!resolution.Recognized)
                         errors.Add(Diagnostic("UnknownVariableType", args?["name"]?.ToString(), typeName, "Unknown variable type."));
+                    else if (resolution.CanonicalType == "AttributeReference"
+                        && _objects.FindObject(resolution.AttributeName ?? typeName) == null)
+                        errors.Add(Diagnostic("ReferencedTypeNotFound", args?["name"]?.ToString(), typeName, "Referenced Attribute was not found."))
+;
                     else if (resolution.CanonicalType == "DomainReference"
                           && _objects.FindObject(resolution.DomainName ?? typeName) == null
                           && !VariableInjector.IsBuiltinUserDefinedType(typeName))

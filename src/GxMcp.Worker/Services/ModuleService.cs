@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Xml;
 using Artech.Architecture.Common.Objects;
 using Artech.Architecture.Common.Services;
 using GxMcp.Worker.Models;
@@ -89,24 +92,110 @@ namespace GxMcp.Worker.Services
             string version = args?["version"]?.ToString();
             if (!string.IsNullOrWhiteSpace(opcFile))
             {
-                bool ok = svc.Install(model, opcFile);
-                return OperationResult(ok ? "ModuleInstalled" : "ModuleInstallDeclined", ok, new JObject { ["opcFile"] = opcFile });
+                OpcPackageIdentity package;
+                try
+                {
+                    package = ReadOpcPackage(opcFile);
+                }
+                catch (FileNotFoundException ex)
+                {
+                    return PackageValidationError("ModulePackageNotFound", ex.Message, opcFile, null,
+                        "Check the .opc path and retry; nothing was changed in the KB.");
+                }
+                catch (Exception ex) when (ex is InvalidDataException || ex is InvalidOperationException)
+                {
+                    return PackageValidationError("ModulePackageInvalid", ex.Message, opcFile, null,
+                        "Use a valid GeneXus .opc package file and retry; nothing was changed in the KB.");
+                }
+                if (IsDryRun(args)) return PreviewInstall(package, version);
+                bool presentBefore = ResolveModule(package.Name) != null;
+                int countBefore = CountModules();
+                bool ok;
+                try
+                {
+                    ok = svc.Install(model, opcFile);
+                }
+                catch (Exception ex)
+                {
+                    return InstallFailure("Install", package.Name, opcFile, null, ex, package);
+                }
+                bool presentAfter = ResolveModule(package.Name) != null;
+                int countAfter = CountModules();
+                var details = PackageResultDetails(package, version, presentBefore, presentAfter, countBefore, countAfter);
+                details["opcFile"] = opcFile;
+                if (!ok)
+                    return OperationResultWithDetails("ModuleInstallDeclined", false, details,
+                        "The SDK declined the install without throwing; inspect modulePresent/moduleCount and retry only after inspecting the worker log.");
+                return OperationResult("ModuleInstalled", true, details);
             }
             if (!string.IsNullOrWhiteSpace(name))
             {
-                bool ok = svc.InstallByName(model, name, version);
-                return OperationResult(ok ? "ModuleInstalled" : "ModuleInstallDeclined", ok, new JObject { ["name"] = name, ["version"] = version });
+                if (IsDryRun(args)) return PreviewInstallByName(name, version);
+                bool presentBefore = ResolveModule(name) != null;
+                int countBefore = CountModules();
+                bool ok;
+                try
+                {
+                    ok = svc.InstallByName(model, name, version);
+                }
+                catch (Exception ex)
+                {
+                    return InstallFailure("InstallByName", name, null, version, ex, null);
+                }
+                bool presentAfter = ResolveModule(name) != null;
+                int countAfter = CountModules();
+                var details = new JObject
+                {
+                    ["name"] = name,
+                    ["version"] = version,
+                    ["alreadyInstalled"] = presentBefore,
+                    ["modulePresent"] = presentAfter,
+                    ["verified"] = presentAfter,
+                    ["rereadConfirmed"] = presentAfter,
+                    ["moduleCountBefore"] = countBefore,
+                    ["moduleCountAfter"] = countAfter
+                };
+                if (!ok)
+                    return OperationResultWithDetails("ModuleInstallDeclined", false, details,
+                        "The SDK declined the install without throwing; inspect modulePresent/moduleCount and retry only after inspecting the worker log.");
+                return OperationResult("ModuleInstalled", true, details);
             }
             return McpResponse.Err(code: "BadArgs", message: "action=install requires either opcFile or name.", hint: "Pass opcFile=<path> or name=<module>.");
         }
 
-        private static string InstallBuiltIn(IModuleManagerService svc, KBModel model, JObject args)
+        private string InstallBuiltIn(IModuleManagerService svc, KBModel model, JObject args)
         {
             string name = args?["name"]?.ToString();
             if (string.IsNullOrWhiteSpace(name))
                 return McpResponse.Err(code: "BadArgs", message: "action=install_builtin requires name.", hint: "Pass the built-in module name.");
-            bool ok = svc.InstallBuiltIn(model, name);
-            return OperationResult(ok ? "ModuleInstalled" : "ModuleInstallDeclined", ok, new JObject { ["name"] = name });
+            if (IsDryRun(args)) return PreviewInstallByName(name, null, builtIn: true);
+            bool presentBefore = ResolveModule(name) != null;
+            int countBefore = CountModules();
+            bool ok;
+            try
+            {
+                ok = svc.InstallBuiltIn(model, name);
+            }
+            catch (Exception ex)
+            {
+                return InstallFailure("InstallBuiltIn", name, null, null, ex, null);
+            }
+            bool presentAfter = ResolveModule(name) != null;
+            int countAfter = CountModules();
+            var details = new JObject
+            {
+                ["name"] = name,
+                ["alreadyInstalled"] = presentBefore,
+                ["modulePresent"] = presentAfter,
+                ["verified"] = presentAfter,
+                ["rereadConfirmed"] = presentAfter,
+                ["moduleCountBefore"] = countBefore,
+                ["moduleCountAfter"] = countAfter
+            };
+            if (!ok)
+                return OperationResultWithDetails("ModuleInstallDeclined", false, details,
+                    "The SDK declined the install without throwing; inspect modulePresent/moduleCount and retry only after inspecting the worker log.");
+            return OperationResult("ModuleInstalled", true, details);
         }
 
         private string Update(IModuleManagerService svc, KBModel model, JObject args)
@@ -118,8 +207,409 @@ namespace GxMcp.Worker.Services
             Module module = ResolveModule(name);
             if (module == null)
                 return McpResponse.Err(code: "ModuleNotFound", message: "Module '" + name + "' not found in this KB.", hint: "Run action=list to inspect installed modules.");
-            bool ok = svc.Update(model, module, version);
-            return OperationResult(ok ? "ModuleUpdated" : "ModuleUpdateDeclined", ok, new JObject { ["name"] = name, ["version"] = version });
+            if (IsDryRun(args))
+            {
+                return McpResponse.Ok(code: "ModuleUpdatePreview", result: new JObject
+                {
+                    ["action"] = "update",
+                    ["name"] = name,
+                    ["version"] = version,
+                    ["modulePresent"] = true,
+                    ["persisted"] = false,
+                    ["note"] = "Read-only preview: the installed module was resolved but no SDK update/save was called."
+                });
+            }
+            bool ok;
+            try
+            {
+                ok = svc.Update(model, module, version);
+            }
+            catch (Exception ex)
+            {
+                return InstallFailure("Update", name, null, version, ex, null);
+            }
+            bool presentAfter = ResolveModule(name) != null;
+            var details = new JObject
+            {
+                ["name"] = name,
+                ["version"] = version,
+                ["modulePresent"] = presentAfter,
+                ["verified"] = presentAfter,
+                ["rereadConfirmed"] = presentAfter
+            };
+            if (!ok)
+                return OperationResultWithDetails("ModuleUpdateDeclined", false, details,
+                    "The SDK declined the update without throwing; inspect modulePresent and retry only after inspecting the worker log.");
+            return OperationResult("ModuleUpdated", true, details);
+        }
+
+        private static bool IsDryRun(JObject args)
+        {
+            return args?["dryRun"]?.ToObject<bool?>() == true;
+        }
+
+        internal sealed class OpcPackageDependency
+        {
+            public string Name;
+            public string Version;
+            public string MinimumVersion;
+            public string MaximumVersion;
+            public string Guid;
+        }
+
+        internal sealed class OpcPackageIdentity
+        {
+            public string Name;
+            public string Version;
+            public string Id;
+            public string Description;
+            public string FileName;
+            public long FileBytes;
+            public List<OpcPackageDependency> Dependencies = new List<OpcPackageDependency>();
+        }
+
+        internal static OpcPackageIdentity ReadOpcPackage(string opcFile)
+        {
+            if (string.IsNullOrWhiteSpace(opcFile))
+                throw new InvalidDataException("Module package path is empty.");
+            FileInfo info;
+            try
+            {
+                info = new FileInfo(opcFile);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidDataException("Module package path is not usable: " + ex.GetType().Name + ".");
+            }
+            if (!info.Exists)
+                throw new FileNotFoundException("Module package file was not found.");
+            if (!string.Equals(info.Extension, ".opc", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Module package '" + info.Name + "' does not have the .opc extension.");
+            try
+            {
+                ZipArchive archive;
+                try
+                {
+                    archive = ZipFile.OpenRead(info.FullName);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidDataException("Module package '" + info.Name + "' could not be read: " + ex.GetType().Name + ".");
+                }
+                using (archive)
+                {
+                    ZipArchiveEntry manifest = null;
+                    foreach (ZipArchiveEntry entry in archive.Entries)
+                    {
+                        if (string.Equals(entry.FullName, "ModuleManifest.mf", StringComparison.OrdinalIgnoreCase))
+                        {
+                            manifest = entry;
+                            break;
+                        }
+                    }
+                    if (manifest == null)
+                        throw new InvalidDataException("Module package '" + info.Name + "' does not contain ModuleManifest.mf.");
+                    if (manifest.Length > 16 * 1024 * 1024)
+                        throw new InvalidDataException("Module package manifest in '" + info.Name + "' is unexpectedly large.");
+                    string xml;
+                    using (var stream = manifest.Open())
+                    using (var reader = new StreamReader(stream))
+                        xml = reader.ReadToEnd();
+                    var document = new XmlDocument();
+                    try
+                    {
+                        document.LoadXml(xml);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidDataException("Module package manifest in '" + info.Name + "' is not valid XML: " + ex.GetType().Name + ".");
+                    }
+                    XmlElement root = document.DocumentElement;
+                    if (root == null || !string.Equals(root.LocalName, "ModulePackage", StringComparison.Ordinal))
+                        throw new InvalidDataException("Module package manifest in '" + info.Name + "' is not a ModulePackage manifest.");
+                    string packageName = ReadManifestText(root, "Name");
+                    if (string.IsNullOrWhiteSpace(packageName))
+                        throw new InvalidDataException("Module package manifest in '" + info.Name + "' does not declare a module Name.");
+                    var identity = new OpcPackageIdentity
+                    {
+                        Name = packageName.Trim(),
+                        Version = ReadManifestText(root, "Version"),
+                        Id = ReadManifestText(root, "ID"),
+                        Description = ReadManifestText(root, "Description"),
+                        FileName = info.Name,
+                        FileBytes = info.Length
+                    };
+                    XmlNodeList dependencies = root.GetElementsByTagName("PackagedModuleDependency");
+                    for (int i = 0; i < dependencies.Count && identity.Dependencies.Count < 1024; i++)
+                    {
+                        var element = dependencies[i] as XmlElement;
+                        if (element == null) continue;
+                        identity.Dependencies.Add(new OpcPackageDependency
+                        {
+                            Name = ReadManifestText(element, "Name"),
+                            Version = ReadManifestText(element, "Version"),
+                            MinimumVersion = ReadManifestText(element, "MinimumVersion"),
+                            MaximumVersion = ReadManifestText(element, "MaximumVersion"),
+                            Guid = ReadManifestText(element, "Guid")
+                        });
+                    }
+                    return identity;
+                }
+            }
+            catch (InvalidDataException)
+            {
+                throw;
+            }
+            catch (FileNotFoundException)
+            {
+                throw new FileNotFoundException("Module package file was not found.");
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidDataException("Module package '" + info.Name + "' could not be read: " + ex.GetType().Name + ".");
+            }
+        }
+
+        private static string ReadManifestText(XmlElement parent, string tag)
+        {
+            try
+            {
+                XmlNodeList nodes = parent.GetElementsByTagName(tag);
+                if (nodes == null || nodes.Count == 0) return null;
+                foreach (XmlNode node in nodes)
+                {
+                    if (node != null && node.ParentNode == parent && node is XmlElement)
+                        return string.IsNullOrWhiteSpace(node.InnerText) ? null : node.InnerText.Trim();
+                }
+                string text = nodes[0] != null ? nodes[0].InnerText : null;
+                return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string PackageValidationError(string code, string message, string opcFile, string name, string hint)
+        {
+            var details = new JObject
+            {
+                ["packageSource"] = opcFile != null ? "opcFile" : "name",
+                ["persisted"] = false
+            };
+            if (opcFile != null) details["fileName"] = Path.GetFileName(opcFile);
+            return McpResponse.Err(code, message, hint,
+                target: name ?? (opcFile == null ? null : Path.GetFileName(opcFile)),
+                errorExtra: details);
+        }
+
+        private string PreviewInstall(OpcPackageIdentity package, string requestedVersion)
+        {
+            var dependencies = new JArray();
+            foreach (OpcPackageDependency dependency in package.Dependencies)
+            {
+                bool installed = false;
+                try
+                {
+                    installed = !string.IsNullOrWhiteSpace(dependency.Name) && ResolveModule(dependency.Name) != null;
+                }
+                catch
+                {
+                }
+                dependencies.Add(new JObject
+                {
+                    ["name"] = dependency.Name,
+                    ["version"] = dependency.Version,
+                    ["minimumVersion"] = dependency.MinimumVersion,
+                    ["maximumVersion"] = dependency.MaximumVersion,
+                    ["installedInKb"] = installed
+                });
+            }
+            bool present = false;
+            try
+            {
+                present = ResolveModule(package.Name) != null;
+            }
+            catch
+            {
+            }
+            return McpResponse.Ok(code: "ModuleInstallPreview", result: new JObject
+            {
+                ["action"] = "install",
+                ["packageSource"] = "opcFile",
+                ["package"] = new JObject
+                {
+                    ["name"] = package.Name,
+                    ["version"] = package.Version,
+                    ["id"] = package.Id,
+                    ["description"] = package.Description,
+                    ["fileName"] = package.FileName,
+                    ["fileBytes"] = package.FileBytes
+                },
+                ["requestedVersion"] = requestedVersion,
+                ["dependencies"] = dependencies,
+                ["dependencyCount"] = dependencies.Count,
+                ["alreadyInstalled"] = present,
+                ["modulePresent"] = present,
+                ["persisted"] = false,
+                ["note"] = "Read-only preview: the .opc manifest was read without the SDK and no install/save was called."
+            });
+        }
+
+        private string PreviewInstallByName(string name, string version, bool builtIn = false)
+        {
+            bool present = false;
+            try
+            {
+                present = ResolveModule(name) != null;
+            }
+            catch
+            {
+            }
+            return McpResponse.Ok(code: builtIn ? "ModuleInstallBuiltInPreview" : "ModuleInstallPreview", result: new JObject
+            {
+                ["action"] = builtIn ? "install_builtin" : "install",
+                ["packageSource"] = builtIn ? "builtin" : "name",
+                ["name"] = name,
+                ["version"] = version,
+                ["alreadyInstalled"] = present,
+                ["modulePresent"] = present,
+                ["persisted"] = false,
+                ["note"] = builtIn
+                    ? "Read-only preview: the built-in module name was validated and the KB was inspected without calling the SDK install."
+                    : "Read-only preview: the KB was inspected without contacting module servers and no install/save was called. Package identity and dependencies resolve through the configured module servers at execution time."
+            });
+        }
+
+        private JObject PackageResultDetails(OpcPackageIdentity package, string requestedVersion, bool presentBefore, bool presentAfter, int countBefore, int countAfter)
+        {
+            var dependencies = new JArray();
+            foreach (OpcPackageDependency dependency in package.Dependencies)
+            {
+                bool installed = false;
+                try
+                {
+                    installed = !string.IsNullOrWhiteSpace(dependency.Name) && ResolveModule(dependency.Name) != null;
+                }
+                catch
+                {
+                }
+                dependencies.Add(new JObject
+                {
+                    ["name"] = dependency.Name,
+                    ["version"] = dependency.Version,
+                    ["minimumVersion"] = dependency.MinimumVersion,
+                    ["maximumVersion"] = dependency.MaximumVersion,
+                    ["installedInKb"] = installed
+                });
+            }
+            return new JObject
+            {
+                ["packageSource"] = "opcFile",
+                ["package"] = new JObject
+                {
+                    ["name"] = package.Name,
+                    ["version"] = package.Version,
+                    ["id"] = package.Id,
+                    ["fileName"] = package.FileName,
+                    ["fileBytes"] = package.FileBytes
+                },
+                ["requestedVersion"] = requestedVersion,
+                ["dependencies"] = dependencies,
+                ["dependencyCount"] = dependencies.Count,
+                ["alreadyInstalled"] = presentBefore,
+                ["modulePresent"] = presentAfter,
+                ["verified"] = presentAfter,
+                ["rereadConfirmed"] = presentAfter,
+                ["moduleCountBefore"] = countBefore,
+                ["moduleCountAfter"] = countAfter,
+                ["note"] = "The SDK reported success and the module was verified by an independent KB readback. A repeated install of the same verified package is a safe no-op at the KB level."
+            };
+        }
+
+        private string InstallFailure(string stage, string moduleName, string opcFile, string version, Exception ex, OpcPackageIdentity package)
+        {
+            bool? observed = null;
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(moduleName)) observed = ResolveModule(moduleName) != null;
+            }
+            catch
+            {
+            }
+            int countAfter = CountModules();
+            var details = new JObject
+            {
+                ["stage"] = "sdk:IModuleManagerService." + stage,
+                ["module"] = moduleName,
+                ["exception"] = DescribeExceptionChain(ex),
+                ["modulePresent"] = observed.HasValue ? (JToken)observed.Value : JValue.CreateNull(),
+                ["moduleCount"] = countAfter,
+                ["rollbackClaimed"] = false
+            };
+            if (!string.IsNullOrWhiteSpace(version)) details["version"] = version;
+            if (!string.IsNullOrWhiteSpace(opcFile)) details["fileName"] = Path.GetFileName(opcFile);
+            if (package != null) details["packageVersion"] = package.Version;
+            return McpResponse.Err(
+                code: "ModuleOperationFailed",
+                message: "Module install failed in " + stage + ": " + RootExceptionLabel(ex) + ".",
+                hint: "Inspect modulePresent/moduleCount: when the module is now listed, verify its objects before retrying; a retry after a partial install is not automatically safe. No rollback was performed or claimed. Check the worker log for the full SDK stack.",
+                target: moduleName,
+                errorExtra: details);
+        }
+
+        internal static string DescribeExceptionChain(Exception ex)
+        {
+            var parts = new List<string>();
+            for (Exception current = ex; current != null && parts.Count < 4; current = current.InnerException)
+            {
+                string message = (current.Message ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ');
+                if (message.Length > 300) message = message.Substring(0, 300) + "…";
+                parts.Add(current.GetType().Name + ": " + message);
+            }
+            string joined = string.Join(" <- ", parts);
+            if (joined.Length > 1200) joined = joined.Substring(0, 1200) + "…";
+            return joined;
+        }
+
+        private static string RootExceptionLabel(Exception ex)
+        {
+            try
+            {
+                if (ex == null) return "unknown SDK failure";
+                return ex.GetType().Name;
+            }
+            catch
+            {
+                return "unknown SDK failure";
+            }
+        }
+
+        private int CountModules()
+        {
+            try
+            {
+                KnowledgeBase kb = _kb != null ? _kb.GetKB() as KnowledgeBase : null;
+                if (kb == null) return -1;
+                int count = 0;
+                foreach (KBObject obj in kb.DesignModel.Objects.GetAll())
+                {
+                    if (obj != null && string.Equals(obj.TypeDescriptor != null ? obj.TypeDescriptor.Name : null, "Module", StringComparison.OrdinalIgnoreCase))
+                        count++;
+                }
+                return count;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        private static string OperationResultWithDetails(string code, bool success, JObject details, string note)
+        {
+            details = details ?? new JObject();
+            if (!string.IsNullOrWhiteSpace(note)) details["note"] = note;
+            return OperationResult(code, success, details);
         }
 
         private string Package(IModuleManagerService svc, KBModel model, JObject args)

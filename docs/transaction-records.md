@@ -43,6 +43,13 @@ environment variables with `userIdEnvironmentVariable` and
 `passwordEnvironmentVariable`. A `connectionStringEnvironmentVariable` is also
 accepted when the complete secret connection string is kept only in the Worker
 host environment. The value of a secret is never returned or logged by the MCP.
+Read-only profile aliases support SQL Server only. When the active datastore
+is PostgreSQL, Oracle, or MySQL and the SDK does not expose connection
+metadata, `records_query` fails closed with `DataStoreConnectionUnavailable`
+whose hint states the SQL Server-only alias limitation instead of suggesting a
+`dataStoreAlias` the service would reject with
+`DataStoreAliasProviderUnsupported`. No connection string is invented and no
+credential is exposed.
 The alias is available only to `records_query`; insert/update operations reject it
 before opening a connection. The alias is reread immediately before the query; a
 profile, KB, or active-datastore change is rejected as `DataStoreConfigurationChanged`

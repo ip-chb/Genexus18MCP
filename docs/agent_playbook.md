@@ -87,7 +87,9 @@ validation cycle:
    time out while the child continues to serve; verify the port separately.
 4. POST `initialize` to `/mcp` with
    `Accept: application/json, text/event-stream`; reuse `MCP-Session-Id`.
-   Tool text is JSON-in-JSON in `result.content[0].text`.
+   Tool text is JSON-in-JSON in `result.content[0].text`. For single-tool
+   probes, `scripts/mcp-probe.ps1 -Tool <name> -Arguments '<json>'` wraps
+   this handshake (session id persists in a temp file across invocations).
 5. Exercise the actual flow. For persistence claims, kill and relaunch the
    gateway before reopening the KB so the semantic cache cannot mask a failure.
 6. Delete scratch objects, close the KB, stop only the scratch gateway, and
@@ -137,6 +139,12 @@ fixture contract live in [`live-kb-test-harness.md`](live-kb-test-harness.md).
 - Native Windows Python cannot read `/tmp/...`; convert paths with `cygpath -w`
   or use the real Windows temporary path.
 - Git Bash passes `taskkill` switches as `//PID` and `//F`.
+- There is no `head`/`tail` on Windows shells; use `Select-Object -First/-Last`
+  instead of piping through Unix names.
+- `python3 -c` scripts come back empty without an error — multiline or with
+  nested quoting alike — always put local Python in a script file (e.g.
+  `scratchpad/`) instead of `-c`.
+- `fc` resolves to `Format-Custom` in PowerShell; call `fc.exe` for byte compares.
 - Long-lived children can keep the shell pipe open after a successful spawn;
   treat the timeout as expected and verify the process/port separately.
 - `git merge-tree` and `git commit-tree` can simulate merges without touching

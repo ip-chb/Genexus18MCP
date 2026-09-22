@@ -27,7 +27,7 @@ GxMcp.Gateway (net10.0-windows, one logical MCP context per client)
                  Selected SDK/driver → Knowledge Base on disk
 ```
 
-- Gateway: `src/GxMcp.Gateway/` (`net10.0-windows`); owns the worker pool and routes MCP tools. In `stdio-isolated` mode (`TransportMode: "stdio-isolated"`), each client runs its own dedicated Gateway without an HTTP listener or shared Gateway lease. `Server.WorkerSharingMode: "shared-host"` optionally attaches compatible Gateways to one per-KB WorkerHost; `"isolated"` remains the default when separate Workers are required. In legacy HTTP mode, gateways share a master process on the HTTP port with proxies.
+- Gateway: `src/GxMcp.Gateway/` (`net10.0-windows`); owns the worker pool and routes MCP tools. In `stdio-isolated` mode (`GatewayMode: "stdio-isolated"`), each client runs its own dedicated Gateway without an HTTP listener or shared Gateway lease. Legacy non-strict configs may still expose `Server.TransportMode`; strict v2 documents use only `GatewayMode` and reject `Server.TransportMode` at parse time. `Server.WorkerSharingMode: "shared-host"` optionally attaches compatible Gateways to one per-KB WorkerHost; `"isolated"` remains the default when separate Workers are required. In legacy HTTP mode, gateways share a master process on the HTTP port with proxies.
 - Worker: `src/GxMcp.Worker/`; hosts the COM-flavoured SDK on an STA thread.
 - Worker sharing: `src/GxMcp.Gateway/SharedWorker*` and `src/GxMcp.Worker/SharedWorkerHost*` implement the supported broker/attachment path. Sharing is keyed by physical KB, Worker executable, GeneXus installation, driver, and target major; it never merges Gateway sessions, authorization, caches, cancellation, progress, notifications, or artifacts.
 - CLI: `cli/run.js`, `cli/index.js`, and `cli/lib/config.js`; configures MCP
@@ -221,6 +221,10 @@ legacy `supportedMajor` field remains the catalog-primary compatibility alias.
   scope, logic, edge cases, compatibility, security, tests, and docs.
 - Do not commit, push, merge, release, deploy, or close an issue unless the
   user explicitly asks. Issue closure requires a released fix and release link.
+- After pushing a merged fix that is not yet released, mark each fixed issue
+  with `pwsh -NoProfile -File scripts/release-issues.ps1 -Action MarkFixedPendingRelease -Issue <N>`;
+  the release entrypoint closes labeled issues on publish. Do not post issue
+  comments unless the user asks.
 
 ## MCP update and harness synchronization
 

@@ -181,9 +181,13 @@ namespace GxMcp.Worker.Helpers
                     var sdtObj = ResolveTypeObject(part.Model, candidateName);
                     if (sdtObj != null && sdtObj.TypeDescriptor.Name.Equals("SDT", StringComparison.OrdinalIgnoreCase))
                     {
-                        BindVariableToSdt(v, sdtObj);
-                        Logger.Info($"Injected variable {name} bound to SDT {sdtObj.Name} (heuristic: prefix={sdtNamePrefix}, memberAccess={sdtMemberAccessHint})");
-                        return v;
+                        // A failed bind must not return a half-bound variable: fall
+                        // through to attribute/primitive inference instead.
+                        if (BindVariableToSdt(v, sdtObj, out _))
+                        {
+                            Logger.Info($"Injected variable {name} bound to SDT {sdtObj.Name} (heuristic: prefix={sdtNamePrefix}, memberAccess={sdtMemberAccessHint})");
+                            return v;
+                        }
                     }
                     if (sdtObj is Transaction bc && bc.IsBusinessComponent)
                     {
@@ -215,6 +219,23 @@ namespace GxMcp.Worker.Helpers
                         v.Type = itype;
                         v.Length = entry.Length;
                         v.Decimals = entry.Decimals;
+                        // issue #281: the index gives only the resolved shape. Try to
+                        // bind the live Attribute object so VarBasedOn/picture survive.
+                        try
+                        {
+                            var indexedAttr = FindAttribute(part.Model, name);
+                            if (indexedAttr != null)
+                            {
+                                v.Type = indexedAttr.Type;
+                                v.Length = indexedAttr.Length;
+                                v.Decimals = indexedAttr.Decimals;
+                                v.Signed = indexedAttr.Signed;
+                                try { DomainPropertyApplier.ApplyAttributeBasedOn((object)v, (object)indexedAttr); } catch { }
+                                try { DomainPropertyApplier.ClearDomainBasedOn((object)v); } catch { }
+                                try { v.SetPropertyValue("DataTypeString", "Attribute:" + indexedAttr.Name); } catch { }
+                            }
+                        }
+                        catch { }
                         Logger.Info($"Injected variable {name} inheriting from INDEXED attribute {name}");
                         return v;
                     }
@@ -229,6 +250,14 @@ namespace GxMcp.Worker.Helpers
                 v.Length = attribute.Length;
                 v.Decimals = attribute.Decimals;
                 v.Signed = attribute.Signed;
+                // issue #281: preserve the Attribute: binding itself, not just the
+                // resolved primitive shape. A copy of Type/Length alone flattens
+                // VarBasedOn/DataTypeString to Numeric(10) and changes ATT_PICTURE
+                // (9999999999 -> ZZZZZZZZZ9). Setting AttributeBasedOn keeps the
+                // picture/semantics and makes untyped add a working recovery path.
+                try { DomainPropertyApplier.ApplyAttributeBasedOn((object)v, (object)attribute); } catch { }
+                try { DomainPropertyApplier.ClearDomainBasedOn((object)v); } catch { }
+                try { v.SetPropertyValue("DataTypeString", "Attribute:" + attribute.Name); } catch { }
                 Logger.Info($"Injected variable {name} inheriting from SDK attribute {attribute.Name}");
                 return v;
             }
@@ -473,6 +502,16 @@ namespace GxMcp.Worker.Helpers
 
         private static string ResolveTypeRepresentation(KBModel model, global::Artech.Genexus.Common.Variable v)
         {
+            // issue #281: an attribute-based variable carries a primitive Type plus
+            // AttributeBasedOn. Without this check both intact (Attribute:CttCar)
+            // and flattened (Numeric(10)) variables serialize as NUMERIC(10),
+            // hiding the picture/semantics loss. Surface the binding first.
+            try
+            {
+                string attrBasedOn = DomainPropertyApplier.GetAttributeBasedOnName((object)v);
+                if (!string.IsNullOrEmpty(attrBasedOn)) return "Attribute:" + attrBasedOn;
+            }
+            catch { }
             // Domain binding wins over raw type
             try
             {
@@ -516,7 +555,9 @@ namespace GxMcp.Worker.Helpers
             foreach (var line in lines)
             {
                 // Format: &Name : Type(Length,Decimals) [Collection]
-                var match = System.Text.RegularExpressions.Regex.Match(line, @"&?(\w+)\s*:\s*([\w\.\-]+)(?:\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\))?(?:\s+(Collection))?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                // issue #281: allow ':' in the type token so "Attribute:<name>"
+                // round-trips instead of being truncated to "Attribute".
+                var match = System.Text.RegularExpressions.Regex.Match(line, @"&?(\w+)\s*:\s*([\w\.\-:]+)(?:\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\))?(?:\s+(Collection))?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 if (match.Success)
                 {
                     string name = match.Groups[1].Value;
@@ -535,12 +576,25 @@ namespace GxMcp.Worker.Helpers
                         part.Variables.Add(v);
                     }
 
+                    // issue #281: attribute-based variables serialize as
+                    // "Attribute:<name>". Bind the live Attribute so picture and
+                    // VarBasedOn survive a text round-trip.
+                    if (TryParseAttributeReference(typeStr, out string textAttrName))
+                    {
+                        var textAttr = FindAttribute(part.Model, textAttrName);
+                        if (textAttr == null)
+                            throw new InvalidOperationException("Attribute '" + textAttrName + "' not found in KB.");
+                        if (!BindVariableToAttribute(v, textAttr, out var textAttrFailure))
+                            throw new InvalidOperationException("VariableTypeNotPersisted: " + textAttrFailure);
+                        Logger.Info($"Resolved variable {name} type to Attribute:{textAttr.Name}");
+                    }
                     // 1. Map string type to eDBType (including Aliases)
-                    if (TryParseDbType(typeStr, out var dbType))
+                    else if (TryParseDbType(typeStr, out var dbType))
                     {
                         v.Type = dbType;
                         v.Length = length;
-                        v.DomainBasedOn = null; 
+                        v.DomainBasedOn = null;
+                        try { DomainPropertyApplier.ClearAttributeBasedOn((object)v); } catch { }
                         v.SetPropertyValue("DataType", null); // Reset user type if it was set
                     }
                     else if (ResolveDomain(part.Model, typeStr, part.KBObject?.Module) is global::Artech.Genexus.Common.Objects.Domain textDomain)
@@ -577,7 +631,8 @@ namespace GxMcp.Worker.Helpers
                             }
                             else if (targetObj.TypeDescriptor.Name.Equals("SDT", StringComparison.OrdinalIgnoreCase))
                             {
-                                BindVariableToSdt(v, targetObj);
+                                if (!BindVariableToSdt(v, targetObj, out var sdtFailure))
+                                    throw new InvalidOperationException("VariableTypeNotPersisted: " + sdtFailure);
                             }
                             else if (targetObj is global::Artech.Genexus.Common.Objects.Transaction trn && trn.IsBusinessComponent)
                             {
@@ -607,24 +662,57 @@ namespace GxMcp.Worker.Helpers
             }
         }
 
-        public static void BindVariableToSdt(global::Artech.Genexus.Common.Variable v, KBObject sdtObj)
+        public static bool BindVariableToSdt(global::Artech.Genexus.Common.Variable v, KBObject sdtObj, out string failure)
         {
+            failure = null;
+            if (v == null || sdtObj == null)
+            {
+                failure = "Variable or SDT is null.";
+                return false;
+            }
             Logger.Info($"[BindVariableToSdt] Binding {v.Name} -> SDT {sdtObj.Name} (Guid={sdtObj.Guid})");
-            v.Type = global::Artech.Genexus.Common.eDBType.GX_SDT;
-            v.SetPropertyValue("DataType", sdtObj.Key);
-            try { v.SetPropertyValue("DataTypeString", sdtObj.Name); } catch (Exception ex) { Logger.Warn("DataTypeString set failed: " + ex.Message); }
 
             // GeneXus stores the actual structural type reference in ATTCUSTOMTYPE. For an SDT the
             // custom type carries the object NAME as its guid string with dataType 254 (the SDT
             // category); the SDK resolves that to the StructureTypeReference at save time. The
             // "Reference X by name can't be saved" error surfaces if a real guid string is used here.
+            // Build the structural reference BEFORE mutating: a null construction must fail
+            // closed without touching (and half-clearing) the variable's existing bindings.
             var inst = BuildAttCustomType(sdtObj.GetType().Assembly, sdtObj.Name, 254, null);
-            if (inst != null)
+            if (inst == null)
             {
-                try { v.SetPropertyValue("ATTCUSTOMTYPE", inst); }
-                catch (Exception ex) { Logger.Error("[BindVariableToSdt] SetPropertyValue ATTCUSTOMTYPE failed: " + ex.Message); }
+                failure = "Could not construct the native SDT type reference for '" + sdtObj.Name + "'.";
+                Logger.Error("[BindVariableToSdt] " + failure);
+                return false;
             }
-            else Logger.Error("[BindVariableToSdt] Could not construct AttCustomType for " + sdtObj.Name);
+
+            try
+            {
+                // A variable retyped onto an SDT must not keep stale Domain or
+                // Attribute bindings: they would conflict with the structural
+                // reference and the persisted type becomes build-dependent.
+                try { DomainPropertyApplier.ClearDomainBasedOn((object)v); } catch { }
+                try { v.DomainBasedOn = null; } catch { }
+                try { v.DomainKey = null; } catch { }
+                try { DomainPropertyApplier.ClearAttributeBasedOn((object)v); } catch { }
+                v.Type = global::Artech.Genexus.Common.eDBType.GX_SDT;
+                v.SetPropertyValue("DataType", sdtObj.Key);
+                try { v.SetPropertyValue("DataTypeString", sdtObj.Name); } catch (Exception ex) { Logger.Warn("DataTypeString set failed: " + ex.Message); }
+                try { v.SetPropertyValue("ATTCUSTOMTYPE", inst); }
+                catch (Exception ex)
+                {
+                    failure = "SetPropertyValue ATTCUSTOMTYPE failed: " + ex.Message;
+                    Logger.Error("[BindVariableToSdt] " + failure);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                failure = ex.InnerException?.Message ?? ex.Message;
+                Logger.Warn("[BindVariableToSdt] " + failure);
+                return false;
+            }
+            return true;
         }
 
         // Bind a variable to a Domain using both SDK references.
@@ -645,6 +733,12 @@ namespace GxMcp.Worker.Helpers
 
             try
             {
+                // A variable retyped onto a Domain must not keep a stale
+                // AttributeBasedOn: the two bindings would conflict and the
+                // persisted picture/semantics become build-dependent. Fresh
+                // variables are unaffected (nothing to clear). Mirrors the
+                // Domain-clearing inside BindVariableToAttribute.
+                try { DomainPropertyApplier.ClearAttributeBasedOn((object)v); } catch { }
                 v.DomainBasedOn = domain;
                 v.DomainKey = domain.Key;
                 string customTypeToken = null;
@@ -668,6 +762,100 @@ namespace GxMcp.Worker.Helpers
                 try { v.DomainKey = null; } catch { }
                 return false;
             }
+        }
+
+        // Bind a variable to an Attribute, preserving VarBasedOn/DataTypeString
+        // ("Attribute:<name>") and the attribute's picture/semantics. A copy of
+        // Type/Length alone flattens to a primitive (issue #281: 9999999999 ->
+        // ZZZZZZZZZ9). Mirrors BindVariableToDomain but for AttributeBasedOn.
+        public static bool BindVariableToAttribute(global::Artech.Genexus.Common.Variable v,
+            global::Artech.Genexus.Common.Objects.Attribute attribute, out string failure)
+        {
+            failure = null;
+            if (v == null || attribute == null)
+            {
+                failure = "Variable or Attribute is null.";
+                return false;
+            }
+
+            try
+            {
+                try { DomainPropertyApplier.ClearDomainBasedOn((object)v); } catch { }
+                try { v.DomainBasedOn = null; } catch { }
+                try { v.DomainKey = null; } catch { }
+                try
+                {
+                    v.Type = attribute.Type;
+                    v.Length = attribute.Length;
+                    v.Decimals = attribute.Decimals;
+                    v.Signed = attribute.Signed;
+                }
+                catch (Exception ex)
+                {
+                    failure = "Could not copy attribute shape: " + (ex.InnerException?.Message ?? ex.Message);
+                    return false;
+                }
+                if (!DomainPropertyApplier.ApplyAttributeBasedOn((object)v, (object)attribute))
+                {
+                    failure = "The SDK did not accept AttributeBasedOn='" + attribute.Name + "'.";
+                    return false;
+                }
+                try { v.SetPropertyValue("DataTypeString", "Attribute:" + attribute.Name); } catch { }
+                Logger.Info($"[BindVariableToAttribute] Bound {v.Name} -> Attribute:{attribute.Name}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                failure = ex.InnerException?.Message ?? ex.Message;
+                Logger.Warn("[BindVariableToAttribute] " + failure);
+                try { DomainPropertyApplier.ClearAttributeBasedOn((object)v); } catch { }
+                return false;
+            }
+        }
+
+        // Pure name+key seam for SDT / Business Component post-save checks.
+        // The persisted reference must point at the requested object GUID with the
+        // requested kind ("SDT" or "BusinessComponent"); anything else — a dropped
+        // binding flattened to a primitive, or a retargeted object — fails closed.
+        internal static bool IsNativeObjectBindingParts(
+            Guid expectedGuid, string expectedKind,
+            Guid? actualGuid, string actualKind,
+            out string failure)
+        {
+            if (!actualGuid.HasValue || actualGuid.Value != expectedGuid)
+            {
+                failure = "The persisted variable references object '"
+                    + (actualGuid?.ToString("D") ?? "")
+                    + "', not the requested '" + expectedGuid.ToString("D") + "'.";
+                return false;
+            }
+            if (!string.Equals(actualKind ?? string.Empty, expectedKind ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            {
+                failure = "The persisted reference kind '" + (actualKind ?? "")
+                    + "' does not match requested '" + (expectedKind ?? "") + "'.";
+                return false;
+            }
+            failure = null;
+            return true;
+        }
+
+        // Pure helper: split an "Attribute:<name>" (or bare attribute via explicit
+        // basedOnAttribute) request into the attribute name. Returns false when the
+        // input is not an attribute reference so callers fall through to Domain/SDT.
+        public static bool TryParseAttributeReference(string input, out string attributeName)
+        {
+            attributeName = null;
+            if (string.IsNullOrWhiteSpace(input)) return false;
+            string trimmed = input.Trim().TrimStart('&');
+            const string prefix = "Attribute:";
+            if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                string name = trimmed.Substring(prefix.Length).Trim();
+                if (string.IsNullOrEmpty(name)) return false;
+                attributeName = name;
+                return true;
+            }
+            return false;
         }
 
         // Domain resolution is intentionally separate from ResolveTypeObject and from the generic
@@ -737,6 +925,33 @@ namespace GxMcp.Worker.Helpers
                 return false;
             }
 
+            failure = null;
+            return true;
+        }
+
+        // Pure name+key seam for the light post-save check (VerifyPersistedVariable).
+        // The name must match; when BOTH keys are available they must also match, so
+        // a homonymous Domain from another Module cannot pass as the requested one.
+        // A missing key on either side keeps the legacy name-only behavior instead of
+        // failing closed on builds that do not populate DomainKey.
+        internal static bool IsNativeDomainBindingParts(
+            string expectedName,
+            Guid? expectedType, int? expectedId,
+            string actualName,
+            Guid? actualType, int? actualId,
+            out string failure)
+        {
+            if (!string.Equals(actualName ?? string.Empty, expectedName ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+            {
+                failure = "Persisted DomainBasedOn='" + (actualName ?? "") + "' does not match requested Domain '" + (expectedName ?? "") + "'.";
+                return false;
+            }
+            if (expectedType.HasValue && expectedId.HasValue && actualType.HasValue && actualId.HasValue
+                && (expectedType.Value != actualType.Value || expectedId.Value != actualId.Value))
+            {
+                failure = "Persisted DomainKey does not match the requested Domain entity (homonymous Domain in another Module?).";
+                return false;
+            }
             failure = null;
             return true;
         }
@@ -966,6 +1181,13 @@ namespace GxMcp.Worker.Helpers
             if (nativeType == null)
                 throw new InvalidOperationException("The GeneXus type provider did not expose the requested Business Component.");
 
+            // Clear stale bindings only AFTER the native type resolved: the throws
+            // above must leave an existing variable untouched. A variable retyped
+            // onto a BC must not keep stale Domain or Attribute bindings.
+            try { DomainPropertyApplier.ClearDomainBasedOn((object)v); } catch { }
+            try { v.DomainBasedOn = null; } catch { }
+            try { v.DomainKey = null; } catch { }
+            try { DomainPropertyApplier.ClearAttributeBasedOn((object)v); } catch { }
             v.Type = global::Artech.Genexus.Common.eDBType.GX_BUSCOMP;
             v.SetPropertyValue("DataType", bcObj.Key);
             v.SetPropertyValue("ATTCUSTOMTYPE", nativeType);

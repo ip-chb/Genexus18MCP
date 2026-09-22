@@ -894,11 +894,7 @@ namespace GxMcp.Worker.Services
             string family = DatabaseProviderResolver.DetectFamily(provider, dbms);
             if (profileAlias != null)
             {
-                string configuredFamily = NormalizeFamily(profileAlias.Family);
-                if (!string.IsNullOrWhiteSpace(profileAlias.Family) && configuredFamily != family)
-                    throw new RecordOperationException("DataStoreAliasFamilyMismatch", "The profile alias family does not match the active GeneXus datastore.", "Configure the alias for the same SQL Server datastore family reported by GeneXus.", profileAlias.Alias);
-                if (family != "sqlserver")
-                    throw new RecordOperationException("DataStoreAliasProviderUnsupported", "Read-only profile aliases currently support SQL Server only.", "Use a SQL Server active datastore or omit dataStoreAlias.", profileAlias.Alias);
+                ValidateProfileAliasFamily(family, profileAlias);
                 if (!string.IsNullOrWhiteSpace(profileAlias.Provider)
                     && !string.Equals(profileAlias.Provider, provider, StringComparison.OrdinalIgnoreCase))
                     throw new RecordOperationException("DataStoreAliasProviderMismatch", "The profile alias provider does not match the active GeneXus datastore.", "Remove Provider or set it to the provider reported by GeneXus.", profileAlias.Alias);
@@ -923,7 +919,7 @@ namespace GxMcp.Worker.Services
                 if (profileAlias != null && !integrated && (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(password)))
                     throw new RecordOperationException("DataStoreAliasInvalid", "The selected connection alias requires host credentials that are not available.", "Set the referenced user/password environment variables on the Worker host; their values are never returned.", profileAlias.Alias);
                 if (string.IsNullOrWhiteSpace(server) || (family != "oracle" && string.IsNullOrWhiteSpace(database)))
-                    throw new RecordOperationException(profileAlias == null ? "DataStoreConnectionUnavailable" : "DataStoreAliasInvalid", "The selected datastore does not expose enough connection metadata for a safe native record operation.", "Configure server and database in the selected profile alias; credentials and connection strings are never returned by this tool.");
+                    throw new RecordOperationException(profileAlias == null ? "DataStoreConnectionUnavailable" : "DataStoreAliasInvalid", "The selected datastore does not expose enough connection metadata for a safe native record operation.", profileAlias == null ? BuildConnectionUnavailableHint(family) : "Configure server and database in the selected profile alias; credentials and connection strings are never returned by this tool.");
                 if (family == "sqlserver")
                 {
                     connectionString = BuildSqlServerConnectionString(server, database, user, password, integrated, timeoutSeconds);
@@ -1151,6 +1147,24 @@ namespace GxMcp.Worker.Services
             }
             catch { }
             return null;
+        }
+
+        internal static void ValidateProfileAliasFamily(string family, ProfileDataStoreAlias alias)
+        {
+            if (alias == null) return;
+            string configuredFamily = NormalizeFamily(alias.Family);
+            if (!string.IsNullOrWhiteSpace(alias.Family) && configuredFamily != family)
+                throw new RecordOperationException("DataStoreAliasFamilyMismatch", "The profile alias family does not match the active GeneXus datastore.", "Configure the alias for the same SQL Server datastore family reported by GeneXus.", alias.Alias);
+            if (family != "sqlserver")
+                throw new RecordOperationException("DataStoreAliasProviderUnsupported", "Read-only profile aliases currently support SQL Server only.", "Use a SQL Server active datastore or omit dataStoreAlias.", alias.Alias);
+        }
+
+        internal static string BuildConnectionUnavailableHint(string family)
+        {
+            if (string.Equals(NormalizeFamily(family), "sqlserver", StringComparison.OrdinalIgnoreCase))
+                return "Configure server and database in the active datastore, or select a SQL Server dataStoreAlias; credentials and connection strings are never returned by this tool.";
+            string recognized = string.IsNullOrWhiteSpace(family) ? "unrecognized" : family.Trim();
+            return "The recognized '" + recognized + "' datastore does not expose enough connection metadata for a safe native record operation; read-only profile aliases currently support SQL Server only. Credentials and connection strings are never returned by this tool.";
         }
 
         private static string NormalizeFamily(string family)
@@ -1550,7 +1564,7 @@ namespace GxMcp.Worker.Services
             }
         }
 
-        private sealed class ProfileDataStoreAlias
+        internal sealed class ProfileDataStoreAlias
         {
             public string Alias;
             public string DataStore;

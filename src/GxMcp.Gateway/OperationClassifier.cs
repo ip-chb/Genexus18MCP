@@ -245,6 +245,10 @@ namespace GxMcp.Gateway
             "genexus_create:save_as",
             "genexus_create:template",
             "genexus_memory:consolidate",
+            "genexus_module:install",
+            "genexus_module:install_builtin",
+            "genexus_module:update",
+            "genexus_io:import_part",
             "genexus_db:records_insert",
             "genexus_db:records_update",
             "genexus_transfer:import",
@@ -265,6 +269,8 @@ namespace GxMcp.Gateway
         };
 
         internal static IReadOnlyCollection<string> ActionTools => ActionContracts.Keys;
+
+        internal static IReadOnlyCollection<string> PreviewCapableActions => DryRunCapableActions;
 
         internal static string BuildHelpContract(string toolName)
         {

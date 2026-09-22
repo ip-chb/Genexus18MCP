@@ -11,6 +11,7 @@ namespace GxMcp.Worker.Helpers
         public int? Length { get; set; }
         public int? Decimals { get; set; }
         public string DomainName { get; set; }
+        public string AttributeName { get; set; }
         public string Suggestion { get; set; }
         public List<string> AcceptedList { get; set; }
     }
@@ -47,6 +48,19 @@ namespace GxMcp.Worker.Helpers
             input = input.Trim();
             if (input.StartsWith("&"))
                 return new TypeResolution { Recognized = true, CanonicalType = "DomainReference", DomainName = input.Substring(1) };
+
+            // issue #281: "Attribute:<name>" binds a variable to a KB Attribute
+            // (VarBasedOn/DataTypeString), preserving picture/semantics. Returned
+            // as its own canonical type so the write path can bind the live
+            // Attribute object instead of flattening to a primitive.
+            const string attrPrefix = "Attribute:";
+            if (input.StartsWith(attrPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                string attrName = input.Substring(attrPrefix.Length).Trim();
+                if (!string.IsNullOrEmpty(attrName) && Regex.IsMatch(attrName, @"^[A-Za-z_][A-Za-z0-9_]*$"))
+                    return new TypeResolution { Recognized = true, CanonicalType = "AttributeReference", AttributeName = attrName, DomainName = attrName, Suggestion = input };
+                return new TypeResolution { Recognized = false, Suggestion = "Attribute:<Name>", AcceptedList = GetAccepted() };
+            }
 
             var m = TypeRegex.Match(input);
             if (!m.Success)

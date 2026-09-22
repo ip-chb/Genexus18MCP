@@ -1121,6 +1121,32 @@ namespace GxMcp.Worker.Services
                                     idxLocal++;
                                     if (!verbose && emitted >= leanVarCap) continue;
                                     var entry = new JObject { ["name"] = v.Name, ["type"] = v.Type.ToString() };
+                                    // issue #281: surface Attribute/Domain bindings so an
+                                    // attribute-based variable (Attribute:CttCar) is
+                                    // distinguishable from a flattened primitive with the
+                                    // same length. Lean mode includes basedOn whenever a
+                                    // binding exists; verbose adds the split fields.
+                                    try
+                                    {
+                                        string attrBasedOn = GxMcp.Worker.Helpers.DomainPropertyApplier.GetAttributeBasedOnName((object)v);
+                                        string domBasedOn = null;
+                                        try { domBasedOn = v.DomainBasedOn?.Name; } catch { }
+                                        if (string.IsNullOrEmpty(domBasedOn))
+                                        {
+                                            try { domBasedOn = GxMcp.Worker.Helpers.DomainPropertyApplier.GetDomainBasedOnName((object)v); } catch { }
+                                        }
+                                        if (!string.IsNullOrEmpty(attrBasedOn))
+                                        {
+                                            entry["basedOn"] = "Attribute:" + attrBasedOn;
+                                            entry["basedOnAttribute"] = attrBasedOn;
+                                        }
+                                        else if (!string.IsNullOrEmpty(domBasedOn))
+                                        {
+                                            entry["basedOn"] = domBasedOn;
+                                            entry["basedOnDomain"] = domBasedOn;
+                                        }
+                                    }
+                                    catch { }
                                     if (verbose) {
                                         entry["length"] = (int)v.Length;
                                         entry["decimals"] = (int)v.Decimals;

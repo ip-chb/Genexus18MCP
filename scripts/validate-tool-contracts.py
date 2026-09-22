@@ -414,6 +414,37 @@ def validate_router_parameters(
     }
 
 
+def validate_line_layout(path: Path, tool_count: int) -> dict[str, int]:
+    """Keep tool_definitions.json as one complete tool object per line.
+
+    Surgical schema edits replace a single line; a whole-file reformat buries
+    the real change in diff noise and can desync the discovery golden fixture.
+    Every non-bracket line must parse as exactly one tool object.
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "[" or lines[-1].strip() != "]":
+        raise ContractError("tool definitions must be a [<newline>...<newline>] document")
+    body = [line for line in lines[1:-1] if line.strip()]
+    if len(body) != tool_count:
+        raise ContractError(
+            f"tool definitions must carry one tool per line: "
+            f"{len(body)} lines for {tool_count} tools"
+        )
+    for index, line in enumerate(body):
+        text = line.strip()
+        if index < len(body) - 1:
+            if not text.endswith(","):
+                raise ContractError(f"tools line {index + 2}: expected trailing comma")
+            text = text[:-1]
+        try:
+            tool = json.loads(text)
+        except json.JSONDecodeError as error:
+            raise ContractError(f"tools line {index + 2}: not one complete tool object ({error})")
+        if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
+            raise ContractError(f"tools line {index + 2}: expected a tool object with a name")
+    return {"lines": len(body)}
+
+
 def validate_tool(tool: dict[str, Any], index: int) -> int:
     name = tool.get("name")
     if not isinstance(name, str) or not name.strip():
@@ -470,6 +501,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     try:
         document = json.loads(args.path.read_text(encoding="utf-8"))
         counts = validate_document(document)
+        validate_line_layout(args.path, counts["tools"])
         capabilities = validate_capabilities_inventory(document)
         print(
             "tool-contracts: valid "
