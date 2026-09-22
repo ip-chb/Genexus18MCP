@@ -163,31 +163,30 @@ namespace GxMcp.Worker.Tests
         }
 
         [Fact]
-        public void GenericReapply_ReapplyOverloadNre_FallsBackToApplyOverload()
+        public void GenericReapply_ByDefault_IsUnsupported_BecauseHeadlessReapplyDoesNotRegenerate()
         {
-            // Live GX17 U4 + K2BEntityServices: the reapply overload throws NRE headless.
-            var engine = new FakeEngine { ReapplyImpl = _ => throw new NullReferenceException("headless") };
-            engine.InstancesById[K2BEntityServicesId] = new object();
-            var svc = MakeK2BService(engine);
-
-            string json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: true, objectNameForResponse: ObjName);
-            var obj = JObject.Parse(json);
-
-            Assert.Equal("ok", obj["status"]?.ToString());
-            Assert.False(obj["result"]?["wasFirstApply"]?.ToObject<bool>());
-            Assert.Equal(1, engine.ReapplyCalls);
-            Assert.Equal(1, engine.ApplyCalls);
-            Assert.Equal("apply-overload-after-reapply-nre", obj["result"]?["engineRoute"]?.ToString());
-        }
-
-        [Fact]
-        public void GenericReapply_UsesEngineReapply_AndNeverTouchesWwpId()
-        {
+            // Live GX17 U4 + K2BTools 13.1: headless reapply re-saved the instance only;
+            // no generated object changed, so the route must not report PatternApplied.
             var engine = new FakeEngine();
             engine.InstancesById[K2BEntityServicesId] = new object();
             var svc = MakeK2BService(engine);
 
             string json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: true, objectNameForResponse: ObjName);
+
+            Assert.Contains("PatternRouteUnsupported", json);
+            Assert.Contains("GeneXus IDE", json);
+            Assert.Equal(0, engine.ReapplyCalls);
+            Assert.Equal(0, engine.ApplyCalls);
+        }
+        [Fact]
+        public void GenericReapply_WhenEnabled_UsesEngineReapply_AndNeverTouchesWwpId()
+        {
+            var engine = new FakeEngine();
+            engine.InstancesById[K2BEntityServicesId] = new object();
+            var svc = MakeK2BService(engine);
+
+            string json = null;
+            WithRoutes(firstApply: true, reapply: true, () => json = svc.ApplyPatternToObject(null, K2BEntityServicesId, "K2BEntityServices", null, reapply: true, objectNameForResponse: ObjName));
             var obj = JObject.Parse(json);
 
             Assert.Equal("ok", obj["status"]?.ToString());

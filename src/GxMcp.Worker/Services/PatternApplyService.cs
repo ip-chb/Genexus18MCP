@@ -434,14 +434,20 @@ namespace GxMcp.Worker.Services
         internal static class PatternRouteCapabilities
         {
             // ---------------------------------------------------------------------------
-            // Generic (non-WorkWithPlus) pattern route switches - issue #260.
-            // Flip to false when the live smoke shows the route does not work headless
-            // (e.g. K2BTools documents that K2BEntityServices instances cannot be
-            // initialized or attached to a Transaction outside the IDE). An unsupported
+            // Generic (non-WorkWithPlus) pattern route switches - issue #260. An unsupported
             // route is rejected with PatternRouteUnsupported before any engine call.
+            //
+            // Live GX17 U4 + K2BTools 13.1 evidence (2026-09-22):
+            // - First apply generates the instance and its objects (K2BEntityServices on a
+            //   Transaction created WW<Trn>, <Trn>General, <Trn>Wrapper, export procedures).
+            // - Reapply does NOT regenerate: the ApplyPattern(PatternInstance, ApplySettings)
+            //   overload throws NRE headless, and ApplyPattern(KBObject, PatternDefinition) on
+            //   an existing instance only re-saves the instance while every generated object
+            //   keeps its previous version. Reporting that as applied would be a false
+            //   success, so reapply stays unsupported until a regenerating route exists.
             // ---------------------------------------------------------------------------
             internal static bool GenericFirstApplySupported = true;
-            internal static bool GenericReapplySupported = true;
+            internal static bool GenericReapplySupported = false;
 
             internal static bool IsSupported(PatternManifest pattern, PatternRoute route, out string reason)
             {
@@ -450,7 +456,7 @@ namespace GxMcp.Worker.Services
                 bool supported = route == PatternRoute.FirstApply ? GenericFirstApplySupported : GenericReapplySupported;
                 if (!supported)
                     reason = (route == PatternRoute.FirstApply ? "First apply" : "Reapply") + " of " + (pattern?.Name ?? "this pattern") +
-                             " through the pattern engine is not supported by this MCP build.";
+                             " through the pattern engine is not supported by this MCP build: headless reapply does not regenerate the pattern's objects. Apply the pattern in the GeneXus IDE to regenerate them.";
                 return supported;
             }
 
@@ -922,7 +928,6 @@ namespace GxMcp.Worker.Services
                 ["generatedObjects"] = new JArray(generated),
                 ["errors"] = new JArray(result?.Errors ?? Enumerable.Empty<string>())
             };
-            if (!string.IsNullOrEmpty(result?.EngineRoute)) patternResult["engineRoute"] = result.EngineRoute;
             JArray patternWarnings = null;
             if (patternValidationIssues != null)
             {
@@ -1306,7 +1311,6 @@ namespace GxMcp.Worker.Services
                 ["generatedObjects"] = new JArray(generated),
                 ["errors"] = new JArray(result?.Errors ?? Enumerable.Empty<string>())
             };
-            if (!string.IsNullOrEmpty(result?.EngineRoute)) patternResult["engineRoute"] = result.EngineRoute;
             if (!string.IsNullOrEmpty(instanceName)) patternResult["patternHost"] = instanceName;
 
             var canonicalObj = JObject.Parse(McpResponse.Ok(target: targetName, code: "PatternApplied", result: patternResult));
@@ -2641,18 +2645,6 @@ namespace GxMcp.Worker.Services
                     Logger.Info("Reapply fallback: settings ignored on the void overload — defaults applied.");
                 }
                 var result = _engine.ApplyPattern(parent, patternDefinition, settings);
-                wasFirstApply = false;
-                return result;
-            }
-            catch (NullReferenceException ex)
-            {
-                // The reapply overload needs IDE services a headless Worker lacks and throws
-                // NRE (observed for K2BEntityServices on GX17 U4, and the reason the WWP route
-                // skips it). The first-apply overload re-applies an existing instance.
-                Logger.Info("PatternEngine reapply overload threw NRE (" + ex.Message + ") - falling back to first-apply overload.");
-                var result = _engine.ApplyPattern(parent, patternDefinition, settings) ?? new PatternApplyResult();
-                // Surfaced so callers know the reapply overload failed before this route ran.
-                result.EngineRoute = "apply-overload-after-reapply-nre";
                 wasFirstApply = false;
                 return result;
             }

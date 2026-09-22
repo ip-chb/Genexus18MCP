@@ -336,6 +336,14 @@ namespace GxMcp.Worker.Services
                         success["resolvedType"] = resolvedObject.TypeDescriptor?.Name;
                     }
                     if (currentPattern != null) success["patternName"] = currentPattern.Name;
+                    if (currentPattern != null && !currentPattern.IsWorkWithPlus)
+                    {
+                        // Live GX17 + K2BTools: saving the instance leaves the generated objects
+                        // at their previous version, and headless reapply does not regenerate
+                        // them either (issue #260). Say so instead of implying a regeneration.
+                        success["generatedObjectsRegenerated"] = false;
+                        success["warning"] = "The " + currentPattern.Name + " instance was saved, but its generated objects were not regenerated. Apply the pattern in the GeneXus IDE to regenerate them.";
+                    }
 
                     // Friction 2026-05-26 — re-assert "Apply this pattern on
                     // save" on the WorkWithPlus host. The raw obj.Save(prefs)

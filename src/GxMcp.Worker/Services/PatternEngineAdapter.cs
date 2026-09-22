@@ -18,8 +18,6 @@ namespace GxMcp.Worker.Services
     {
         public IList<string> GeneratedObjects { get; set; } = new List<string>();
         public IList<string> Errors { get; set; } = new List<string>();
-        /// <summary>Engine overload that produced the result when it differs from the default route.</summary>
-        public string EngineRoute { get; set; }
     }
 
     /// <summary>
