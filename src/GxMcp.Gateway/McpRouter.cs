@@ -1985,6 +1985,15 @@ namespace GxMcp.Gateway
             {
                 if (error[k] != null) trimmed[k] = error[k];
             }
+            // Issue #260: pattern resolution errors name what the caller must pick next
+            // (the instances of an ambiguous parent, the installed patterns, the patterns
+            // an object has). Without them the error only says "name the instance".
+            string[] patternChoiceKeys = { "candidates", "detectedPatterns", "availablePatterns", "existingPatterns" };
+            foreach (var k in patternChoiceKeys)
+            {
+                var value = ResolveErrorField(error, k);
+                if (value != null) trimmed[k] = value;
+            }
             string status = error["status"]?.ToString();
             if (!string.IsNullOrEmpty(status) &&
                 !string.Equals(status, "Error", StringComparison.OrdinalIgnoreCase))

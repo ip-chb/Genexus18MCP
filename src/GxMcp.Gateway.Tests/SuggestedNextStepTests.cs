@@ -105,6 +105,23 @@ namespace GxMcp.Gateway.Tests
         }
 
         [Fact]
+        public void TrimErrorEnvelope_KeepsPatternChoiceLists()
+        {
+            // Issue #260: nested (errorExtra) and top-level (extra) pattern choice lists
+            // survive the terse projection; the caller needs them to pick the instance.
+            var err = JObject.Parse(@"{""status"":""error"",
+                ""error"":{""code"":""PatternInstanceAmbiguous"",""message"":""'DV290' has 2 pattern instances"",
+                    ""candidates"":[{""name"":""K2BEntityServicesDV290"",""pattern"":""K2BEntityServices""}]},
+                ""detectedPatterns"":[{""name"":""K2BTrnFormDV290"",""pattern"":""K2BTrnForm""}]}");
+
+            var trimmed = McpRouter.TrimErrorEnvelope(err, verbose: false);
+
+            Assert.Equal("K2BEntityServicesDV290", trimmed["candidates"]?[0]?["name"]?.ToString());
+            Assert.Equal("K2BTrnForm", trimmed["detectedPatterns"]?[0]?["pattern"]?.ToString());
+            Assert.Null(trimmed["availablePatterns"]);
+        }
+
+        [Fact]
         public void TrimErrorEnvelope_SynthesizesHint_WhenNoneOnPayload()
         {
             var err = JObject.Parse(@"{""code"":""patch_no_match"",""message"":""Context not found.""}");
