@@ -952,6 +952,8 @@ namespace GxMcp.Gateway
                 startInfo.EnvironmentVariables["GXMCP_STATE_SCOPE_ID"] = StateScope.ProcessScopeId.ToString();
                 startInfo.EnvironmentVariables["GXMCP_KB_ID"] = Kb.KbId;
                 startInfo.EnvironmentVariables["GXMCP_KB_GENERATION"] = Kb.ContextGeneration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                startInfo.EnvironmentVariables["GXMCP_OPERATIONAL_STATE_KEY"] =
+                    new OperationalStateKey(StateScope.ProcessScopeId, Kb.KbId, Kb.ContextGeneration).Token;
                 string scopedOperationalDir = Path.GetDirectoryName(CrashLedger.ResolveScopedPath(StateScope.ProcessScopeId, Kb.KbId, Kb.ContextGeneration))!;
                 startInfo.EnvironmentVariables["GXMCP_LOG_DIR"] = scopedOperationalDir;
                 startInfo.EnvironmentVariables["GXMCP_CRASH_LEDGER_PATH"] = Path.Combine(scopedOperationalDir, "crash-ledger.jsonl");

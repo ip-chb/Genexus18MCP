@@ -109,6 +109,7 @@ namespace GxMcp.Gateway
             info.EnvironmentVariables["GX_KB_PATH"] = kb.Path ?? string.Empty;
             info.EnvironmentVariables["GXMCP_DRIVER"] = driver ?? string.Empty;
             info.EnvironmentVariables["GXMCP_TARGET_MAJOR"] = major ?? string.Empty;
+            info.EnvironmentVariables["GXMCP_OPERATIONAL_STATE_KEY"] = identity.Key;
             if (!string.IsNullOrWhiteSpace(Configuration.CurrentConfigPath))
                 info.EnvironmentVariables["GXMCP_PROFILE_CONFIG_PATH"] = Configuration.CurrentConfigPath;
             if (!string.IsNullOrWhiteSpace(legacyProvider))

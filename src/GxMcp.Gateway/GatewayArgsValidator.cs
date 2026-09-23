@@ -39,7 +39,7 @@ namespace GxMcp.Gateway
         private static readonly HashSet<string> CrossCuttingArgs = new(StringComparer.OrdinalIgnoreCase)
         {
             "axiCompact", "projection", "fields", "full",
-            "kb", "alias", "workingDir", "correlationId",
+            "kb", "kbAlias", "alias", "workingDir", "correlationId",
             "dryRun", "confirm", "force"
         };
 
@@ -89,11 +89,18 @@ namespace GxMcp.Gateway
                     // 2. additionalProperties: false — reject unknown keys
                     if (additionalPropertiesFalse && !properties.ContainsKey(prop.Name))
                     {
+                        if (CrossCuttingArgs.Contains(prop.Name))
+                            continue;
+
+                        string? keySuggestion = DidYouMean.Suggest(
+                            prop.Name, properties.Properties().Select(p => p.Name));
+
                         violations.Add(new Violation
                         {
                             Path = prop.Name,
                             Expected = "none (additionalProperties: false)",
-                            Actual = prop.Value.Type.ToString().ToLowerInvariant()
+                            Actual = "unknown argument",
+                            Suggestion = keySuggestion
                         });
                         continue;
                     }

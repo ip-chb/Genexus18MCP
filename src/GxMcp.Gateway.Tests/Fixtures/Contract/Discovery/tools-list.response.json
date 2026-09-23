@@ -9,37 +9,27 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Use this for cross-object semantic analysis. mode=context (alias deep_context) returns 360° task context in 1 call (object + called procedures' parm signatures + referenced tables' schemas/PKs + SDTs + callers). Other modes: impact, callers, hierarchy, navigation, linter, summary, explain. mode=explain is compatibility-only: it preserves the legacy response envelope and returns NotImplemented; use mode=summary for a concise overview, mode=context for 360° task context, or genexus_read for source. Requires Ready index for impact/callers.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_analyze",
       "inputSchema": {
-        "examples": [
-          {
-            "mode": "impact",
-            "name": "Customer"
-          },
-          {
-            "mode": "summary",
-            "name": "Customer"
-          }
-        ],
         "properties": {
           "code": {
-            "description": "mode=explain: legacy code snippet carried through the compatibility-only envelope; the result is NotImplemented. Use mode=summary, mode=context, or genexus_read for supported analysis.",
+            "description": "mode=explain: legacy code snippet…",
             "type": "string"
           },
           "cursor": {
-            "description": "mode=context: continuation cursor returned by a budgeted context page.",
+            "description": "mode=context: continuation cursor…",
             "type": "string"
           },
           "dryRun": {
-            "description": "mode=linter: with fix=true, reject the unsupported combination before any SDK read; with fix=false, lint remains read-only.",
+            "description": "mode=linter: with fix=true, reject the…",
             "type": "boolean"
           },
           "fix": {
-            "description": "mode=linter: apply automatic fixes to the KB.",
+            "description": "mode=linter: apply automatic fixes to…",
             "type": "boolean"
           },
           "format": {
-            "description": "mode=dependency_heatmap: ascii adds rendered bar chart.",
+            "description": "mode=dependency_heatmap: ascii adds…",
             "enum": [
               "json",
               "ascii"
@@ -51,7 +41,7 @@
             "type": "string"
           },
           "maxBytes": {
-            "description": "mode=context: maximum UTF-8 bytes for the returned context bundle (bounded by the server).",
+            "description": "mode=context: maximum UTF-8 bytes for…",
             "type": "integer"
           },
           "mode": {
@@ -81,16 +71,16 @@
             "type": "string"
           },
           "top": {
-            "description": "mode=code_metrics: maximum results (default 25).",
+            "description": "mode=code_metrics: maximum results…",
             "type": "integer"
           },
           "waitForIndex": {
             "default": true,
-            "description": "mode=impact: block up to 30s for Ready index (default true).",
+            "description": "mode=impact: block up to 30s for Ready…",
             "type": "boolean"
           },
           "waitTimeoutMs": {
-            "description": "mode=impact: maximum index wait in milliseconds.",
+            "description": "mode=impact: maximum index wait in…",
             "type": "integer"
           }
         },
@@ -108,29 +98,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Inspect HTTP procedures and native API routes. action=list|describe|routes_inspect|routes_clone|routes_update|snapshot|diff_baseline|export_openapi|import_openapi. API route writes use typed ServiceGroupSource, optimistic versioning, full snapshot, rollback and post-save reread; no lifecycle operation is implicit.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_api",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "list"
-          },
-          {
-            "action": "routes_inspect",
-            "api": "OrdersApi"
-          },
-          {
-            "action": "routes_clone",
-            "api": "OrdersApi",
-            "dryRun": true,
-            "operation": "REVERSE",
-            "rollbackOnFailure": true,
-            "sourcePrefix": "inbound",
-            "targetPrefix": "reverse"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "API introspection, route-editing, or baseline operation to perform.",
+            "description": "API introspection, route-editing, or…",
             "enum": [
               "list",
               "describe",
@@ -145,11 +117,11 @@
             "type": "string"
           },
           "api": {
-            "description": "API name (routes_inspect|routes_clone|routes_update).",
+            "description": "API name…",
             "type": "string"
           },
           "baseline": {
-            "description": "Baseline name under .gx/api-baselines/ or absolute path (action=diff_baseline).",
+            "description": "Baseline name under .gx/api-baselines/…",
             "type": "string"
           },
           "content": {
@@ -158,11 +130,11 @@
           },
           "dryRun": {
             "default": true,
-            "description": "routes_clone/routes_update: preview first; false writes only with expectedVersion or versionToken.",
+            "description": "routes_clone/routes_update: preview…",
             "type": "boolean"
           },
           "expectedVersion": {
-            "description": "versionToken returned by the preceding dry run or inspection.",
+            "description": "versionToken returned by the preceding…",
             "type": "string"
           },
           "kb": {
@@ -174,16 +146,16 @@
             "type": "string"
           },
           "operation": {
-            "description": "Operation value carried by the reused request contract, e.g. REVERSE.",
+            "description": "Operation value carried by the reused…",
             "type": "string"
           },
           "pathPrefix": {
-            "description": "Folder prefix filter (action=list/export_openapi).",
+            "description": "Folder prefix filter…",
             "type": "string"
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "Restore the complete API snapshot when post-save verification diverges.",
+            "description": "Restore the complete API snapshot when…",
             "type": "boolean"
           },
           "routes": {
@@ -238,7 +210,7 @@
             "type": "string"
           },
           "versionToken": {
-            "description": "Backward-compatible alias for expectedVersion; pass the token returned by the preceding dry run or inspection.",
+            "description": "Backward-compatible alias for…",
             "type": "string"
           }
         },
@@ -256,44 +228,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Apply a pattern (e.g. WorkWithPlus) to a parent (IDE Right-click → Apply Pattern). Transaction=family-gen; WebPanel/WebComponent/SDPanel=direct-attach (pass settings.template). mode=diagnose (or dryRun=true) returns findings without mutating. Working on Smart Devices? → resources/read uri=genexus://kb/skills/sd-panel-mobile for Main object semantics. mode=actions manages typed grid and form-level actions, persists and re-reads PatternInstance, supports dryRun diff and rollbackOnFailure, and never adds security permissions automatically.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_apply_pattern",
       "inputSchema": {
-        "examples": [
-          {
-            "name": "Customer",
-            "pattern": "WorkWithPlus"
-          },
-          {
-            "name": "Customer",
-            "reapply": true
-          },
-          {
-            "mode": "diagnose",
-            "name": "Customer",
-            "pattern": "WorkWithPlus"
-          },
-          {
-            "action": "add_grid_action",
-            "actionName": "Approve",
-            "dryRun": true,
-            "group": "Actions",
-            "mode": "actions",
-            "name": "Customer",
-            "pattern": "WorkWithPlus",
-            "procedure": "ApproveCustomer"
-          },
-          {
-            "action": "add_user_action",
-            "actionName": "BaixarConfiguracao",
-            "caption": "Baixar Configuração",
-            "containerName": "TableActions",
-            "dryRun": true,
-            "mode": "actions",
-            "name": "WorkWithPlusImpressaoConfiguracao",
-            "pattern": "WorkWithPlus",
-            "rollbackOnFailure": true
-          }
-        ],
         "properties": {
           "action": {
             "description": "mode=actions operation.",
@@ -308,7 +244,7 @@
             "type": "string"
           },
           "actionName": {
-            "description": "Name of the action to add, update, or remove. Form-level actions derive the GeneXus event Do<actionName>.",
+            "description": "Name of the action to add, update, or…",
             "type": "string"
           },
           "caption": {
@@ -324,7 +260,7 @@
             "type": "string"
           },
           "containerName": {
-            "description": "Form-level action container name, usually TableActions.",
+            "description": "Form-level action container name,…",
             "type": "string"
           },
           "description": {
@@ -333,11 +269,11 @@
           },
           "dryRun": {
             "default": false,
-            "description": "Alias for mode=diagnose. When true, returns pattern findings without mutating. With mode=actions it previews the typed action diff.",
+            "description": "Alias for mode=diagnose. When true,…",
             "type": "boolean"
           },
           "enabledWhen": {
-            "description": "Condition expression for action enablement.",
+            "description": "Condition expression for action…",
             "type": "string"
           },
           "group": {
@@ -353,7 +289,7 @@
             "type": "string"
           },
           "mode": {
-            "description": "apply (default) mutates; diagnose returns reasons without applying. actions exposes typed WWP grid, form-level, and action-group editing.",
+            "description": "apply (default) mutates; diagnose…",
             "enum": [
               "apply",
               "diagnose",
@@ -370,7 +306,7 @@
             "type": "string"
           },
           "pattern": {
-            "description": "Installed pattern name or GUID. Required for apply/diagnose; omit with reapply=true to infer from the existing instance.",
+            "description": "Installed pattern name or GUID.…",
             "type": "string"
           },
           "position": {
@@ -379,7 +315,7 @@
             "type": "integer"
           },
           "procedure": {
-            "description": "Target Procedure to execute on action click.",
+            "description": "Target Procedure to execute on action…",
             "type": "string"
           },
           "reapply": {
@@ -389,11 +325,11 @@
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "On a failed write or post-save verification, attempt to restore the original PatternInstance and report the rollback result.",
+            "description": "On a failed write or post-save…",
             "type": "boolean"
           },
           "selection": {
-            "description": "Execution scope: current (single record) or multiple.",
+            "description": "Execution scope: current (single…",
             "enum": [
               "current",
               "multiple"
@@ -406,11 +342,11 @@
           },
           "validate": {
             "default": false,
-            "description": "apply mode only: optionally build the generated host. mode=actions never invokes Specify, Generate, Build, Rebuild, compilation, or tests.",
+            "description": "apply mode only: optionally build the…",
             "type": "boolean"
           },
           "visibleWhen": {
-            "description": "Condition expression for action visibility.",
+            "description": "Condition expression for action…",
             "type": "string"
           }
         },
@@ -428,36 +364,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Author members of object types the structure DSL doesn't cover. add_external_method / add_external_property add a method (with parameters) or property to an External Object; add_menu_option adds an option to a Menu (target = a KB object to call); add_condition adds a filter expression to a Data Selector. name = the target object.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_authoring",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "add_external_property",
-            "name": "MyExternalObject",
-            "payload": {
-              "name": "apiKey",
-              "type": "Character"
-            }
-          },
-          {
-            "action": "add_menu_option",
-            "name": "MainMenu",
-            "payload": {
-              "description": "Customers",
-              "target": "CustomerWW"
-            }
-          },
-          {
-            "action": "add_condition",
-            "name": "ActiveCustomers",
-            "payload": {
-              "source": "CustomerActive = True"
-            }
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Authoring operation to add a typed member or condition to a supported object.",
+            "description": "Authoring operation to add a typed…",
             "enum": [
               "add_external_method",
               "add_external_property",
@@ -471,11 +382,11 @@
             "type": "string"
           },
           "name": {
-            "description": "ExternalObject / Menu / DataSelector name.",
+            "description": "ExternalObject / Menu / DataSelector…",
             "type": "string"
           },
           "payload": {
-            "description": "add_external_method:{name,returnType?,parameters?:[{name,type?,inout?}]}. add_external_property:{name,type?}. add_menu_option:{description,target?,optionCode?}. add_condition:{source}.",
+            "description": "add_external_method:{name,returnType?,p…",
             "type": "object"
           }
         },
@@ -494,25 +405,11 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "Headless-browser verification umbrella. action=smoke (HTTP 200 + clean console), a11y (axe), wcag (caption/tooltip lint), capture (console/network/exceptions), cross (multi-engine), preview (render WebPanel + capture HTML/a11y/screenshot, optionally diff baseline). preview uses mode=render|run (default render; run auto-resolves the KB launcher, IDE F5 parity).",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_browser",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "preview",
-            "name": "WPMain"
-          },
-          {
-            "action": "cross",
-            "browsers": [
-              "chrome",
-              "firefox"
-            ],
-            "name": "WPMain"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Browser verification operation to execute.",
+            "description": "Browser verification operation to…",
             "enum": [
               "smoke",
               "a11y",
@@ -545,7 +442,7 @@
             "type": "boolean"
           },
           "capture": {
-            "description": "capture|cross|preview channels: console|network|exceptions|html|a11y|screenshot.",
+            "description": "capture|cross|preview channels:…",
             "items": {
               "type": "string"
             },
@@ -632,19 +529,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Read-only SDK comparison. content adds diffs (part=read alias, partType, unified/omittedReason), preserving equal/differences. CRLF/CR to LF. Limits: input 1M UTF-16 units, diff 16K/part, JSON evidence 128KiB total; excess omitted. properties unchanged. See genexus_help.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_compare",
       "inputSchema": {
-        "examples": [
-          {
-            "objectA": "Customer",
-            "objectB": "CustomerV2"
-          },
-          {
-            "mode": "properties",
-            "objectA": "Customer",
-            "objectB": "CustomerV2"
-          }
-        ],
         "properties": {
           "kb": {
             "description": "KB alias.",
@@ -665,7 +551,7 @@
             "type": "string"
           },
           "type": {
-            "description": "Object type filter applied to both lookups, e.g. 'Transaction'.",
+            "description": "Object type filter applied to both…",
             "type": "string"
           }
         },
@@ -684,18 +570,12 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "Probes every open worker and recovers unhealthy ones (force=true targets all). journal_status inspects recovery fences; journal_repair atomically merges valid candidates and verifies persistence. Repair defaults to dryRun=true, preserves pending reads and never touches Workers/KB. Do not combine journal actions with force.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_connection_recover",
       "inputSchema": {
-        "examples": [
-          {},
-          {
-            "force": true
-          }
-        ],
         "properties": {
           "action": {
             "default": "recover",
-            "description": "Worker recovery, journal inspection or explicit repair.",
+            "description": "Worker recovery, journal inspection or…",
             "enum": [
               "recover",
               "journal_status",
@@ -705,12 +585,12 @@
           },
           "dryRun": {
             "default": true,
-            "description": "Preview journal_repair; explicitly false to persist reconciliation.",
+            "description": "Preview journal_repair; explicitly…",
             "type": "boolean"
           },
           "force": {
             "default": false,
-            "description": "Recover ALL workers, even responsive ones.",
+            "description": "Recover ALL workers, even responsive…",
             "type": "boolean"
           }
         },
@@ -725,30 +605,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Creation. action: object (Transaction/Procedure/WebPanel/SDT/API/Domain/Dashboard/Folder/Module; type='API' scaffolds a REST API object with one HTTP-verb block per object; type='Folder'/'Module' create containers; folder/module places the new object there; SDT and Transaction take optional firstItem/firstItemType; Domain takes dataType+length or enumValues; NOT WWP — use genexus_apply_pattern) | popup (popup WebPanel with Form type='layout' body) | sd_panel_create|sd_panel_inspect|sd_panel_edit | save_as (clone parts) | scaffold|translate|sample (forge) | template (kpi_header|empty_state|confirm_dialog) | object_atomic (issue #62: all-or-nothing create/update of an object with variables[], rules[], parms[], properties{} and source in ONE validated call — pre-validates every field before the first save, composes the SDK write primitives, compensates on failure, dryRun previews, validate=true runs the inline Specify pass, update mode guards concurrent writes via expectedVersion). | curl_procedure imports a REST-consumer Procedure from a curl command through the GeneXus SDK.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_create",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "object",
-            "name": "NewPanel",
-            "type": "WebPanel"
-          },
-          {
-            "action": "object",
-            "name": "CustomerApi",
-            "type": "API"
-          },
-          {
-            "action": "popup",
-            "name": "MyPopup",
-            "spec": {
-              "host": "Customer"
-            }
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Object-creation or scaffold operation to perform.",
+            "description": "Object-creation or scaffold operation…",
             "enum": [
               "object",
               "object_atomic",
@@ -770,7 +631,7 @@
             "type": "object"
           },
           "baseVersion": {
-            "description": "Optimistic concurrency versionToken for atomic create/update.",
+            "description": "Optimistic concurrency versionToken for…",
             "type": "string"
           },
           "basedOn": {
@@ -782,7 +643,7 @@
             "type": "string"
           },
           "curl": {
-            "description": "curl_procedure: the curl command to import as a Procedure.",
+            "description": "curl_procedure: the curl command to…",
             "type": "string"
           },
           "dataType": {
@@ -794,7 +655,7 @@
             "type": "integer"
           },
           "description": {
-            "description": "Human-readable description / title of the object.",
+            "description": "Human-readable description / title of…",
             "type": "string"
           },
           "dryRun": {
@@ -809,19 +670,19 @@
             "type": "array"
           },
           "expectedVersion": {
-            "description": "object_atomic update: optimistic concurrency token returned as `version` by a prior atomic create/update/read; a mismatch fails with ConcurrentModification instead of overwriting concurrent changes.",
+            "description": "object_atomic update: optimistic…",
             "type": "string"
           },
           "firstItem": {
-            "description": "object SDT/Transaction optional: name of the initial structure item/key attribute to seed (SDK requires >=1). Defaults to <ObjectName>Id for Transaction and Item1 for SDT.",
+            "description": "object SDT/Transaction optional: name…",
             "type": "string"
           },
           "firstItemType": {
-            "description": "object SDT/Transaction optional: type of the seeded first item/key attribute (Character/Numeric/VarChar/…). Defaults to Numeric(4) for Transaction and VarChar for SDT.",
+            "description": "object SDT/Transaction optional: type…",
             "type": "string"
           },
           "folder": {
-            "description": "object: Folder destination (created in Root, then moved+verified).",
+            "description": "object: Folder destination (created in…",
             "type": "string"
           },
           "includePatternInstance": {
@@ -837,7 +698,7 @@
             "type": "integer"
           },
           "mode": {
-            "description": "object_atomic: create (fail if exists), update (fail if missing), auto (default — create or update by existence).",
+            "description": "object_atomic: create (fail if exists),…",
             "enum": [
               "create",
               "update",
@@ -846,11 +707,11 @@
             "type": "string"
           },
           "module": {
-            "description": "object: Module destination (created in Root, then moved+verified).",
+            "description": "object: Module destination (created in…",
             "type": "string"
           },
           "name": {
-            "description": "Name of the object to create, clone, or update.",
+            "description": "Name of the object to create, clone, or…",
             "type": "string"
           },
           "newName": {
@@ -858,7 +719,7 @@
             "type": "string"
           },
           "objectType": {
-            "description": "Legacy alias for type when creating an object.",
+            "description": "Legacy alias for type when creating an…",
             "type": "string"
           },
           "overwrite": {
@@ -866,11 +727,11 @@
             "type": "boolean"
           },
           "parentPath": {
-            "description": "object: folder/module destination (fallback when folder/module absent).",
+            "description": "object: folder/module destination…",
             "type": "string"
           },
           "parms": {
-            "description": "object_atomic: parameter entries rendered into a Parm rule — bare names (\"&Id\") or prefixed (\"out:&Msg\").",
+            "description": "object_atomic: parameter entries…",
             "items": {
               "type": "string"
             },
@@ -881,15 +742,15 @@
             "type": "string"
           },
           "properties": {
-            "description": "object_atomic: object-level properties applied via the genexus_properties path (propertyName → value).",
+            "description": "object_atomic: object-level properties…",
             "type": "object"
           },
           "rollbackOnFailure": {
-            "description": "Issue #60: with action=object and validationMode=specify, roll back the created object when the specify pass reports errors. A fresh object has no pre-write snapshot, so rollback reports rolledBack=false — delete it via genexus_delete_object if spec fails.",
+            "description": "Issue #60: with action=object and…",
             "type": "boolean"
           },
           "rules": {
-            "description": "object_atomic: rule lines (e.g. \"Parm(in:&Id);\"). Send actual line breaks; literal backslash sequences \\r\\n, \\n, or \\r are rejected before the first save.",
+            "description": "object_atomic: rule lines (e.g.…",
             "items": {
               "type": "string"
             },
@@ -900,7 +761,7 @@
             "type": "boolean"
           },
           "source": {
-            "description": "object_atomic: Source part text. Send actual line breaks; literal backslash sequences \\r\\n, \\n, or \\r are rejected before the first save.",
+            "description": "object_atomic: Source part text. Send…",
             "type": "string"
           },
           "spec": {
@@ -917,27 +778,27 @@
             "type": "string"
           },
           "type": {
-            "description": "Object type to create (Transaction, Procedure, WebPanel, SDT, API, Domain, Dashboard, Folder, Module).",
+            "description": "Object type to create (Transaction,…",
             "type": "string"
           },
           "updateExisting": {
             "default": false,
-            "description": "object_atomic: allow updating existing object if it already exists.",
+            "description": "object_atomic: allow updating existing…",
             "type": "boolean"
           },
           "validate": {
-            "description": "object_atomic: run the inline Specify pass (Spec+Gen) before confirming success. On failure with rollbackOnFailure=true, a freshly-created object is deleted so the operation stays all-or-nothing.",
+            "description": "object_atomic: run the inline Specify…",
             "type": "boolean"
           },
           "validationMode": {
-            "description": "Issue #60: with action=object, run the inline Specify pass (Spec+Gen, no Compile) after creation, returning structured spc*/gen* diagnostics in the same call. Combines with rollbackOnFailure.",
+            "description": "Issue #60: with action=object, run the…",
             "enum": [
               "specify"
             ],
             "type": "string"
           },
           "variables": {
-            "description": "object_atomic: one object per variable — {varName, typeName?, length?, decimals?, collection?}. Validated before any save; errors are attributed to variables[N].",
+            "description": "object_atomic: one object per variable…",
             "items": {
               "properties": {
                 "basedOn": {
@@ -982,41 +843,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Native, typed, atomic Transaction + Data View authoring over an existing physical table. action=inspect|dry_run|create|update|delete. dry_run performs validation without constructing or saving SDK objects. create/update persist the root-only Transaction and Data View, then reread and verify the committed pair; commit and verification status are reported separately. action=delete is destructive and requires confirm=true when dryRun=false. No action implicitly runs Specify, Generate, Build, Rebuild, Reorg, compilation, publish, execution, or tests; the response includes a no-DDL reorg preview.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_data_view",
       "inputSchema": {
         "additionalProperties": false,
-        "examples": [
-          {
-            "action": "dry_run",
-            "attributeMappings": [
-              {
-                "attribute": "LedgerEntryId",
-                "column": "LedgerEntryId",
-                "key": true
-              },
-              {
-                "attribute": "LedgerEntryAmount",
-                "column": "LedgerEntryAmount"
-              }
-            ],
-            "dataStore": "Default",
-            "dataViewName": "LedgerEntryDV",
-            "rollbackOnFailure": true,
-            "schema": "APP",
-            "table": "LEDGERENTRY",
-            "transaction": "LedgerEntryView",
-            "updatable": true
-          },
-          {
-            "action": "delete",
-            "confirm": true,
-            "dataViewName": "LedgerEntryDV",
-            "transaction": "LedgerEntryView"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Operation to inspect, preview, create, update, or delete a native Data View mapping.",
+            "description": "Operation to inspect, preview, create,…",
             "enum": [
               "inspect",
               "dry_run",
@@ -1050,24 +882,24 @@
             "type": "array"
           },
           "confirm": {
-            "description": "Required for action=delete when dryRun=false; explicitly authorizes removing the Transaction and Data View.",
+            "description": "Required for action=delete when…",
             "type": "boolean"
           },
           "dataStore": {
-            "description": "Existing GeneXus data store category (default Default).",
+            "description": "Existing GeneXus data store category…",
             "type": "string"
           },
           "dataViewName": {
-            "description": "Data View name associated with the Transaction logical table.",
+            "description": "Data View name associated with the…",
             "type": "string"
           },
           "dryRun": {
             "default": false,
-            "description": "Forces every action to remain read-only; create/update validate their complete definition and delete returns a deletion preview.",
+            "description": "Forces every action to remain…",
             "type": "boolean"
           },
           "expectedVersion": {
-            "description": "Optimistic concurrency token returned by inspect/dry_run/create/update/delete preview.",
+            "description": "Optimistic concurrency token returned…",
             "type": "string"
           },
           "kb": {
@@ -1076,7 +908,7 @@
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "Atomic SDK rollback is always enforced; this flag records the caller's rollback intent.",
+            "description": "Atomic SDK rollback is always enforced;…",
             "type": "boolean"
           },
           "schema": {
@@ -1084,7 +916,7 @@
             "type": "string"
           },
           "table": {
-            "description": "Existing physical table and GeneXus table-metadata name.",
+            "description": "Existing physical table and GeneXus…",
             "type": "string"
           },
           "transaction": {
@@ -1112,30 +944,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Database umbrella. Actions: drift_check|drift_report; optimize_analyze|optimize_suggest|optimize_report; sql_ddl|sql_navigation; sample_data; records_query|records_insert|records_update (typed Transaction rows; query read-only; writes dryRun; no business rules); types_list|types_describe|types_validate; reorg_impact; reorg_preview (non-mutating; deep uses ImpactDatabase); translations_import.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_db",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "drift_check"
-          },
-          {
-            "action": "sql_ddl",
-            "name": "Customer"
-          },
-          {
-            "action": "records_query",
-            "dataStoreAlias": "production",
-            "limit": 20,
-            "timeoutSeconds": 20,
-            "transaction": "Order",
-            "where": {
-              "OrderId": 1
-            }
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Database operation. records_query is read-only; records_insert/records_update default to dryRun=true and require the matching single-use v2 preview token for persistence.",
+            "description": "Database operation. records_query is…",
             "enum": [
               "drift_check",
               "drift_report",
@@ -1158,39 +971,39 @@
             "type": "string"
           },
           "dataStore": {
-            "description": "records_*: existing active-environment datastore; defaults to the SDK default.",
+            "description": "records_*: existing active-environment…",
             "type": "string"
           },
           "dataStoreAlias": {
-            "description": "records_query: profile alias; no credentials.",
+            "description": "records_query: profile alias; no…",
             "type": "string"
           },
           "databaseManagedFields": {
-            "description": "records_*: reviewed trigger-maintained fields; excludes keys and supplied values. Included in the preview token.",
+            "description": "records_*: reviewed trigger-maintained…",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "deep": {
-            "description": "reorg_impact/reorg_preview only: run ISpecifierService.ImpactDatabase (specification, build-heavy) for the authoritative AnalysisResult. Default false (cheap timestamp heuristic).",
+            "description": "reorg_impact/reorg_preview only: run…",
             "type": "boolean"
           },
           "dryRun": {
             "default": true,
-            "description": "records_insert/update: validate and reread the plan without writing.",
+            "description": "records_insert/update: validate and…",
             "type": "boolean"
           },
           "expectedCount": {
-            "description": "records_update: defaults to exactly one matched record.",
+            "description": "records_update: defaults to exactly one…",
             "type": "integer"
           },
           "expectedVersion": {
-            "description": "records_*: v2 token from the matching write dry-run; query/v1 tokens cannot authorize writes.",
+            "description": "records_*: v2 token from the matching…",
             "type": "string"
           },
           "fields": {
-            "description": "records_query: optional root-attribute projection.",
+            "description": "records_query: optional root-attribute…",
             "items": {
               "type": "string"
             },
@@ -1247,7 +1060,7 @@
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "records_*: default true; validation failures roll back before commit. Post-commit compensation is refused to preserve concurrent writers.",
+            "description": "records_*: default true; validation…",
             "type": "boolean"
           },
           "rows": {
@@ -1255,7 +1068,7 @@
             "type": "integer"
           },
           "timeoutSeconds": {
-            "description": "records_*: command timeout, 1-60 seconds.",
+            "description": "records_*: command timeout, 1-60…",
             "type": "integer"
           },
           "transaction": {
@@ -1275,7 +1088,7 @@
             "type": "string"
           },
           "values": {
-            "description": "records_insert/update: typed attribute values.",
+            "description": "records_insert/update: typed attribute…",
             "type": "object"
           },
           "versionToken": {
@@ -1283,7 +1096,7 @@
             "type": "string"
           },
           "where": {
-            "description": "records_query/update: equality filters only; update requires a filter.",
+            "description": "records_query/update: equality filters…",
             "type": "object"
           }
         },
@@ -1301,32 +1114,19 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Delete an object from the KB through its native SDK identity. Irreversible — confirm=true required. Inspects native incoming references first; dryRun=true previews without deleting it.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_delete_object",
       "inputSchema": {
-        "examples": [
-          {
-            "confirm": true,
-            "name": "ObsoletePanel",
-            "type": "WebPanel"
-          },
-          {
-            "confirm": true,
-            "dryRun": true,
-            "name": "TemporaryDomain",
-            "type": "Domain"
-          }
-        ],
         "properties": {
           "confirm": {
             "type": "boolean"
           },
           "dryRun": {
             "default": false,
-            "description": "When true, returns the resolved object and native references without deleting it.",
+            "description": "When true, returns the resolved object…",
             "type": "boolean"
           },
           "expectedVersion": {
-            "description": "Optional optimistic-concurrency token returned by a prior dry run.",
+            "description": "Optional optimistic-concurrency token…",
             "type": "string"
           },
           "kb": {
@@ -1354,20 +1154,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Deploy application over the SDK. action=list_targets (read-only, default) enumerates deployment target types (IDeploymentTargetService); action=deploy (destructive, confirm=true) runs IDeploymentService.Deploy(model).",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_deploy",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "list_targets"
-          },
-          {
-            "action": "deploy",
-            "confirm": true
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Deployment-target or deployment execution operation to perform.",
+            "description": "Deployment-target or deployment…",
             "enum": [
               "list_targets",
               "deploy"
@@ -1375,7 +1166,7 @@
             "type": "string"
           },
           "confirm": {
-            "description": "deploy: required (builds + ships the app).",
+            "description": "deploy: required (builds + ships the…",
             "type": "boolean"
           },
           "kb": {
@@ -1394,20 +1185,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Use to generate structured docs (wiki, dependency graph, health reports). Don't use for programmatic analysis (see genexus_analyze) or source (see genexus_read).",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_doc",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "wiki",
-            "target": "Customer"
-          },
-          {
-            "action": "health"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "wiki: generate markdown docs; visualize: generate dependency graph; health: produce health report.",
+            "description": "wiki: generate markdown docs;…",
             "enum": [
               "wiki",
               "visualize",
@@ -1416,11 +1198,11 @@
             "type": "string"
           },
           "kb": {
-            "description": "KB alias for health or other worker-backed document actions.",
+            "description": "KB alias for health or other…",
             "type": "string"
           },
           "target": {
-            "description": "Object or domain name (required for wiki/visualize).",
+            "description": "Object or domain name (required for…",
             "type": "string"
           }
         },
@@ -1438,18 +1220,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Health check: GX install, KB state, worker, cache age, recent telemetry. Paste output for triage when something feels off. When more than one KB is open, pass kb=<alias> to pick which one to diagnose.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_doctor",
       "inputSchema": {
         "additionalProperties": false,
-        "examples": [
-          {},
-          {
-            "kb": "mykb"
-          }
-        ],
         "properties": {
           "kb": {
-            "description": "Alias of the KB to diagnose. Optional; required only when multiple KBs are open (otherwise the single open / default KB is used).",
+            "description": "Alias of the KB to diagnose. Optional;…",
             "type": "string"
           }
         },
@@ -1464,54 +1240,20 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Edit object part. name or targets (exclusive). mode: full|patch|ops. dryRun first. async=true returns an operationId for lifecycle polling. Text payloads for Source/Rules/Events/Code must contain real line breaks; literal backslash sequences \\r\\n, \\n, or \\r are rejected before persistence with LiteralLineBreaksDetected. For WWP edit host's PatternInstance NOT the parent WebForm (gets overwritten on reapply). Uncertain about a property/method/event? → resources/read uri=genexus://kb/skills/navigation (or gam-integrated-security / sd-panel-mobile / webpanel-events) first.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_edit",
       "inputSchema": {
-        "examples": [
-          {
-            "mode": "patch",
-            "name": "Customer",
-            "part": "Source",
-            "patch": {
-              "find": "old",
-              "replace": "new"
-            }
-          },
-          {
-            "dryRun": true,
-            "mode": "patch",
-            "name": "Customer",
-            "part": "Rules",
-            "patch": {
-              "find": "error(",
-              "replace": "msg("
-            }
-          },
-          {
-            "mode": "patch",
-            "name": "Customer",
-            "part": "Source",
-            "patch": {
-              "find": "old",
-              "replace": "new",
-              "scope": {
-                "end": "// Proximo banco",
-                "start": "// Banco B"
-              }
-            }
-          }
-        ],
         "properties": {
           "async": {
-            "description": "Run as a background job. Result returns operationId/job_id for genexus_lifecycle polling.",
+            "description": "Run as a background job. Result returns…",
             "type": "boolean"
           },
           "autoDeclareVariables": {
             "default": false,
-            "description": "When true, scans updated source for newly referenced &Variable tokens and auto-declares them in VariablesPart.",
+            "description": "When true, scans updated source for…",
             "type": "boolean"
           },
           "baseVersion": {
-            "description": "Optimistic concurrency: pass the versionToken from the genexus_read this edit is based on. If the object changed since (e.g. edited in the IDE), the write is refused with VersionConflict instead of overwriting the newer version. Omit to skip the check.",
+            "description": "Optimistic concurrency: pass the…",
             "type": "string"
           },
           "changeSet": {
@@ -1568,7 +1310,7 @@
           },
           "concurrencyPolicy": {
             "default": "warn",
-            "description": "warn (default) or fail_if_open if open in GeneXus IDE.",
+            "description": "warn (default) or fail_if_open if open…",
             "enum": [
               "warn",
               "fail_if_open"
@@ -1579,30 +1321,34 @@
             "type": "string"
           },
           "context": {
-            "description": "Exact existing text to find (Replace) or anchor after (Insert_After). Required for both. For text parts, send real line breaks; literal backslash sequences \\r\\n, \\n, or \\r are rejected before persistence.",
+            "description": "Exact existing text to find (Replace)…",
             "type": "string"
           },
           "dryRun": {
             "type": "boolean"
           },
           "estimated_seconds": {
-            "description": "When async=true, expected runtime used for progress/job metadata (default 30).",
+            "description": "When async=true, expected runtime used…",
             "type": "integer"
           },
           "expectedCount": {
             "type": "integer"
           },
           "expectedVersion": {
-            "description": "Alias of baseVersion. The write is refused when the current version no longer matches.",
+            "description": "Alias of baseVersion. The write is…",
             "type": "string"
           },
           "forceWrite": {
             "default": false,
-            "description": "WebForm only: persist despite SDK WebForm validation errors; response includes validationOverridden=true.",
+            "description": "WebForm only: persist despite SDK…",
+            "type": "boolean"
+          },
+          "includePersistedText": {
+            "description": "Full text; default false.",
             "type": "boolean"
           },
           "indentation": {
-            "description": "patch.indentation may also be passed at the top level. Honored ONLY by the abbreviated patch={find,replace} form; combined with operation, mode=ops, targets[], parts[], Insert_After or Append the call is rejected with IndentationUnsupportedPatchForm and nothing is written.",
+            "description": "patch.indentation may also be passed at…",
             "type": "object"
           },
           "kb": {
@@ -1618,7 +1364,7 @@
             "type": "string"
           },
           "module": {
-            "description": "mode=ops: Transaction module for modular objects.",
+            "description": "mode=ops: Transaction module for…",
             "type": "string"
           },
           "name": {
@@ -1633,11 +1379,11 @@
             "type": "string"
           },
           "ops": {
-            "description": "GeneXus semantic ops (NOT RFC 6902 JSON-Patch). Each item: {op, args}. Supported ops: set_attribute, add_attribute, remove_attribute (Transaction); add_rule, remove_rule (Transaction/Procedure/WebPanel); set_property (any kind). Use mode=patch for textual find/replace.",
+            "description": "GeneXus semantic ops (NOT RFC 6902…",
             "items": {
               "properties": {
                 "args": {
-                  "description": "Op-specific args. set_attribute: {name, type?, description?}. add_attribute: {name, type, ...}. add_rule: {rule}. set_property: {name, value}.",
+                  "description": "Op-specific args. set_attribute: {name,…",
                   "type": "object"
                 },
                 "op": {
@@ -1663,7 +1409,7 @@
             "type": "string"
           },
           "parts": {
-            "description": "Multi-part edit on a single object. Each item: {part, content, mode?}. Saves the object once atomically. Text content must use real line breaks; literal backslash sequences \\r\\n, \\n, or \\r are rejected before persistence.",
+            "description": "Multi-part edit on a single object.…",
             "items": {
               "properties": {
                 "content": {
@@ -1686,17 +1432,17 @@
           },
           "patch": {
             "additionalProperties": true,
-            "description": "Shorthand for {find,replace} on mode=patch: find is the exact existing text, replace is inserted literally (no auto-indentation). Optional opt-in protections: scope bounds the search region, indentation validates the replacement's base indent. Both apply ONLY to this shape — never with operation, mode=ops, targets[], parts[], Insert_After or Append.",
+            "description": "Shorthand for {find,replace} on…",
             "properties": {
               "find": {
-                "description": "Exact existing text to find. Real line breaks; tabs/spaces must match the part.",
+                "description": "Exact existing text to find. Real line…",
                 "type": "string"
               },
               "indentation": {
-                "description": "Validates the base indentation of the located match against the first line of replace before persisting; tabs and spaces are distinct and nothing is reformatted. With replaceAll=true every match is validated. Errors: IndentationMismatch, IndentationNotComparable.",
+                "description": "Validates the base indentation of the…",
                 "properties": {
                   "mode": {
-                    "description": "validate: block the write when the replacement's base indentation differs from the matched line's.",
+                    "description": "validate: block the write when the…",
                     "enum": [
                       "validate"
                     ],
@@ -1713,14 +1459,14 @@
                 "type": "string"
               },
               "scope": {
-                "description": "Region delimited by complete-line anchors: editable starts after scope.start's last line and ends before scope.end's first line (EOF when end is omitted). Anchors stay outside the region, are compared with only CRLF/LF normalized, and must each be unique. Errors: ScopeStartRequired, ScopeAnchorNotFound, ScopeAnchorAmbiguous, ScopeAnchorNotComparable. The response reports editableStartLine, editableEndLineExclusive and scopeEndsAtEof.",
+                "description": "Region delimited by complete-line…",
                 "properties": {
                   "end": {
-                    "description": "Optional. Unique complete-line anchor starting immediately after the editable region. Omitted = region runs to EOF.",
+                    "description": "Optional. Unique complete-line anchor…",
                     "type": "string"
                   },
                   "start": {
-                    "description": "Required. Unique complete-line anchor ending immediately before the editable region.",
+                    "description": "Required. Unique complete-line anchor…",
                     "type": "string"
                   }
                 },
@@ -1733,12 +1479,12 @@
             "type": "object"
           },
           "replaceAll": {
-            "description": "patch mode only. Apply to ALL occurrences instead of requiring expectedCount to match exactly.",
+            "description": "patch mode only. Apply to ALL…",
             "type": "boolean"
           },
           "requireObjectSave": {
             "default": false,
-            "description": "Full Source requires transactional object save. Events patch: dryRun available; real writes blocked by ObjectSaveIsolationUnverified until SDK/pattern save-event isolation is established. No override; baseVersion required.",
+            "description": "Full Source requires transactional…",
             "type": "boolean"
           },
           "return_post_state": {
@@ -1746,15 +1492,15 @@
             "type": "boolean"
           },
           "rollbackOnFailure": {
-            "description": "Explicit rollback only. Full Source verification failure reports AtomicRollbackUnavailable without a restore write until atomic conditional restore is supported. Other paths require a valid snapshot. No rollback when false or omitted.",
+            "description": "Explicit rollback only. Full Source…",
             "type": "boolean"
           },
           "scope": {
-            "description": "patch.scope may also be passed at the top level. Honored ONLY by the abbreviated patch={find,replace} form; combined with operation, mode=ops, targets[], parts[], Insert_After or Append the call is rejected with ScopeUnsupportedPatchForm and nothing is written.",
+            "description": "patch.scope may also be passed at the…",
             "type": "object"
           },
           "targets": {
-            "description": "Multi-target Source/Rules writes. Each target may include expectedVersion/baseVersion; all versions are checked before the first write.",
+            "description": "Multi-target Source/Rules writes. Each…",
             "items": {
               "properties": {
                 "baseVersion": {
@@ -1785,7 +1531,7 @@
             "type": "string"
           },
           "validate": {
-            "description": "strict (default) aborts on first error and post-write-verifies visual/PatternInstance writes (re-reads + diffs the persisted XML). best-effort applies what compiles and SKIPS the post-write XML re-read/diff (faster on large WebForm/PatternInstance writes; build to confirm). only runs in-memory, no persist.",
+            "description": "strict (default) aborts on first error…",
             "enum": [
               "strict",
               "best-effort",
@@ -1794,7 +1540,7 @@
             "type": "string"
           },
           "validationMode": {
-            "description": "Issue #60: run the inline Specify pass (Spec+Gen, no Compile) against the edited object right after the write, returning structured spc*/gen* diagnostics in the same call. Combines with rollbackOnFailure.",
+            "description": "Issue #60: run the inline Specify pass…",
             "enum": [
               "specify"
             ],
@@ -1806,7 +1552,7 @@
           },
           "verifyMode": {
             "default": "normalized",
-            "description": "Post-save text comparison. Full exact compares public-read text verbatim; patch exact retains logical CRLF/LF equivalence. normalized ignores EOL, BOM, trailing whitespace and blank lines; semantic also tolerates casing/spacing. Fresh reread always required. sdkSaveCompleted/saved report physical save; persistedStateKnown and postSaveVerification report read evidence. Mismatch never retries automatically.",
+            "description": "Post-save text comparison. Full exact…",
             "enum": [
               "semantic",
               "normalized",
@@ -1819,7 +1565,7 @@
           },
           "visualVerify": {
             "default": false,
-            "description": "Post-edit headless screenshot + pixel-diff vs baseline. See tool-help.",
+            "description": "Post-edit headless screenshot +…",
             "type": "boolean"
           }
         },
@@ -1834,29 +1580,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Edit + rebuild callers in one call. Returns edit diff + impact + a build block that may include taskId/pollTarget for lifecycle follow-up. validate=true/validationMode=specify validates the saved object; rollbackOnFailure restores its pre-write snapshot on specification failure.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_edit_and_build",
       "inputSchema": {
-        "examples": [
-          {
-            "name": "Customer",
-            "part": "Source",
-            "patch": {
-              "find": "oldValue",
-              "replace": "newValue"
-            },
-            "validate": true
-          },
-          {
-            "dryRun": true,
-            "mode": "patch",
-            "name": "Customer",
-            "part": "Rules",
-            "patch": {
-              "find": "error(",
-              "replace": "msg("
-            }
-          }
-        ],
         "properties": {
           "buildIncludeCallees": {
             "default": "direct",
@@ -1872,11 +1597,15 @@
             "type": "integer"
           },
           "content": {
-            "description": "New content. For mode=patch may be {find,replace} object.",
+            "description": "New content. For mode=patch may be…",
             "type": "string"
           },
           "dryRun": {
             "default": false,
+            "type": "boolean"
+          },
+          "includePersistedText": {
+            "description": "Full text; default false.",
             "type": "boolean"
           },
           "mode": {
@@ -1896,7 +1625,7 @@
             "type": "string"
           },
           "patch": {
-            "description": "Same shape as genexus_edit.patch. Auto-sets mode=patch."
+            "description": "Same shape as genexus_edit.patch.…"
           },
           "rollbackOnFailure": {
             "default": true,
@@ -1919,7 +1648,7 @@
           },
           "visualVerify": {
             "default": false,
-            "description": "Post-edit headless screenshot + pixel-diff vs baseline. See tool-help.",
+            "description": "Post-edit headless screenshot +…",
             "type": "boolean"
           },
           "waitForIndex": {
@@ -1946,25 +1675,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Semantic WebForm edits. Actions: add_textblock, add_button, set_visibility, remove_control, wrap_in_fieldset.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_edit_form",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "add_button",
-            "caption": "Confirmar",
-            "event": "OnConfirm",
-            "name": "WPMain"
-          },
-          {
-            "action": "set_visibility",
-            "controlId": "GrpDetail",
-            "name": "WPMain",
-            "visible": false
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Semantic WebForm control operation to execute.",
+            "description": "Semantic WebForm control operation to…",
             "enum": [
               "add_textblock",
               "add_button",
@@ -1979,22 +1694,22 @@
             "type": "string"
           },
           "controlId": {
-            "description": "set_visibility/remove_control: control ID to target.",
+            "description": "set_visibility/remove_control: control…",
             "type": "string"
           },
           "controlIds": {
-            "description": "wrap_in_fieldset: list of control IDs to wrap inside the fieldset.",
+            "description": "wrap_in_fieldset: list of control IDs…",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "dryRun": {
-            "description": "Preview form modifications without persisting.",
+            "description": "Preview form modifications without…",
             "type": "boolean"
           },
           "event": {
-            "description": "add_button: event name to trigger on click.",
+            "description": "add_button: event name to trigger on…",
             "type": "string"
           },
           "format": {
@@ -2010,7 +1725,7 @@
             "type": "string"
           },
           "legend": {
-            "description": "wrap_in_fieldset: legend text for the fieldset container.",
+            "description": "wrap_in_fieldset: legend text for the…",
             "type": "string"
           },
           "name": {
@@ -2018,7 +1733,7 @@
             "type": "string"
           },
           "parent": {
-            "description": "Parent control ID to insert the new control into.",
+            "description": "Parent control ID to insert the new…",
             "type": "string"
           },
           "position": {
@@ -2026,7 +1741,7 @@
             "type": "string"
           },
           "visible": {
-            "description": "set_visibility: visibility state (true or false).",
+            "description": "set_visibility: visibility state (true…",
             "type": "boolean"
           }
         },
@@ -2045,13 +1760,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Format a GeneXus code snippet using worker rules.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_format",
       "inputSchema": {
-        "examples": [
-          {
-            "code": "for each Customer where CustomerId = &Id\n  &Name = CustomerName\nendfor"
-          }
-        ],
         "properties": {
           "code": {
             "type": "string"
@@ -2075,20 +1785,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "GAM / integrated-security provisioning via the SDK's IIntegratedSecurityService — distinct from genexus_security (env-scan/regex audit). action=status (default) is read-only: IsEnabledIntegratedSecurity + GAM-DB-reorganize flag. action=define_api / action=deploy are DESTRUCTIVE — they create/alter GAM security tables in the KB's datastore; no default reaches them, action must be set explicitly.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_gam",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "status"
-          },
-          {
-            "action": "deploy",
-            "forceTableCreation": true
-          }
-        ],
         "properties": {
           "action": {
-            "description": "status (default, read-only) | define_api | deploy.",
+            "description": "status (default, read-only) |…",
             "enum": [
               "status",
               "define_api",
@@ -2097,7 +1798,7 @@
             "type": "string"
           },
           "force": {
-            "description": "define_api only: force flag passed to DefineAPI.",
+            "description": "define_api only: force flag passed to…",
             "type": "boolean"
           },
           "forceTableCreation": {
@@ -2124,35 +1825,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Native typed .NET generator references used by GxExternalReference. list and dry-run actions are read-only. add/remove validate a managed assembly when a path is supplied, require optimistic baseVersion for changes, save only the native GeneratorsPart, reread it, and restore the complete generator-property snapshot on verification failure. No lifecycle action runs implicitly.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_generator_reference",
       "inputSchema": {
         "additionalProperties": false,
-        "examples": [
-          {
-            "action": "list",
-            "environment": ".Net Environment",
-            "generator": "Default (.NET)"
-          },
-          {
-            "action": "dry_run_add",
-            "assembly": "SpreadsheetLibrary.dll",
-            "assemblyPath": "C:\\KBs\\Sample\\CSharpModel\\web\\bin\\SpreadsheetLibrary.dll",
-            "environment": ".Net Environment",
-            "generator": "Default (.NET)"
-          },
-          {
-            "action": "add",
-            "assembly": "SpreadsheetLibrary.dll",
-            "assemblyPath": "C:\\KBs\\Sample\\CSharpModel\\web\\bin\\SpreadsheetLibrary.dll",
-            "baseVersion": "sha256:<token>",
-            "environment": ".Net Environment",
-            "generator": "Default (.NET)",
-            "rollbackOnFailure": true
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Typed .NET generator-reference operation to perform.",
+            "description": "Typed .NET generator-reference…",
             "enum": [
               "list",
               "dry_run_add",
@@ -2163,15 +1841,15 @@
             "type": "string"
           },
           "assembly": {
-            "description": "Assembly file name for add/remove, e.g. SpreadsheetLibrary.dll.",
+            "description": "Assembly file name for add/remove, e.g.…",
             "type": "string"
           },
           "assemblyPath": {
-            "description": "Absolute path or KB-relative path used to validate a managed assembly. Required for add unless found in a standard model/bin location.",
+            "description": "Absolute path or KB-relative path used…",
             "type": "string"
           },
           "baseVersion": {
-            "description": "Optimistic token returned by list or a dry-run. Required for a real state change.",
+            "description": "Optimistic token returned by list or a…",
             "type": "string"
           },
           "dryRun": {
@@ -2180,11 +1858,11 @@
             "type": "boolean"
           },
           "environment": {
-            "description": "Active GeneXus Environment name; the tool never switches environments.",
+            "description": "Active GeneXus Environment name; the…",
             "type": "string"
           },
           "generator": {
-            "description": "Generator display name, e.g. Default (.NET).",
+            "description": "Generator display name, e.g. Default…",
             "type": "string"
           },
           "kb": {
@@ -2193,7 +1871,7 @@
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "Restore and verify the complete prior generator-property snapshot if save/reread diverges.",
+            "description": "Restore and verify the complete prior…",
             "type": "boolean"
           }
         },
@@ -2213,37 +1891,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "GxServer (Team Development) sync. Read: status|pending|ignored|conflicts|history. pending lists locally-changed objects, each flagged ignoredForCommit (true = in the IDE 'Ignored Objects' tab, skipped by a full commit). ignored lists ONLY the excluded objects: commitIgnored (IDE Commit > Ignored Objects) + updateIgnored (IDE Update > Ignored Objects). Write (destructive; requires a GXserver-linked KB): commit (message; optional targets[] = commit ONLY those pending objects; reports committedObjects + remoteVersion) | update (applies changes into local KB; apply=false = download only; leaves conflicts flagged) | lock (target) | resolve (targets[] + strategy). theirs/automerge/update talk to the server and need creds via GXMCP_TEAMDEV_USER/PASSWORD env (url auto-resolves). Returns {connected:false} when KB is not linked.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_gxserver",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "status"
-          },
-          {
-            "action": "commit",
-            "message": "Fix Customer validation"
-          },
-          {
-            "action": "commit",
-            "message": "Ship my proc only",
-            "targets": [
-              "ApiCtlObjTransicionar"
-            ]
-          },
-          {
-            "action": "update"
-          },
-          {
-            "action": "resolve",
-            "strategy": "automerge",
-            "targets": [
-              "Customer"
-            ]
-          }
-        ],
         "properties": {
           "action": {
-            "description": "GXserver/Team Development or CI pipeline operation to perform.",
+            "description": "GXserver/Team Development or CI…",
             "enum": [
               "status",
               "pending",
@@ -2263,23 +1915,23 @@
             "type": "string"
           },
           "apply": {
-            "description": "update: apply changes into local KB (default true); false = download package only.",
+            "description": "update: apply changes into local KB…",
             "type": "boolean"
           },
           "async": {
-            "description": "update/commit: run as a background job — returns an operationId immediately; poll genexus_lifecycle(action=status|result, target=op:<id>). Use for a large update that would exceed the sync window.",
+            "description": "update/commit: run as a background job…",
             "type": "boolean"
           },
           "buildId": {
-            "description": "pipeline_output: build id to fetch output for.",
+            "description": "pipeline_output: build id to fetch…",
             "type": "integer"
           },
           "confirm": {
-            "description": "pipeline_run/pipeline_abort: required (these trigger/cancel a build).",
+            "description": "pipeline_run/pipeline_abort: required…",
             "type": "boolean"
           },
           "force": {
-            "description": "commit: force commit despite pending server-side changes.",
+            "description": "commit: force commit despite pending…",
             "type": "boolean"
           },
           "kb": {
@@ -2295,19 +1947,19 @@
             "type": "string"
           },
           "project": {
-            "description": "pipeline_*: CI pipeline/project name (from pipeline_list).",
+            "description": "pipeline_*: CI pipeline/project name…",
             "type": "string"
           },
           "rebuild": {
-            "description": "pipeline_run: full rebuild instead of incremental.",
+            "description": "pipeline_run: full rebuild instead of…",
             "type": "boolean"
           },
           "runTests": {
-            "description": "pipeline_run: run tests as part of the pipeline.",
+            "description": "pipeline_run: run tests as part of the…",
             "type": "boolean"
           },
           "strategy": {
-            "description": "resolve: which version wins — mine (keep local, default, creds-free), theirs (take server), automerge (3-way merge). theirs/automerge need server creds.",
+            "description": "resolve: which version wins — mine…",
             "enum": [
               "mine",
               "theirs",
@@ -2320,7 +1972,7 @@
             "type": "string"
           },
           "targets": {
-            "description": "commit: partial commit — object names to commit (all other pending objects are excluded). resolve: conflicted object names to resolve. Names must appear in action=pending/conflicts.",
+            "description": "commit: partial commit — object names…",
             "items": {
               "type": "string"
             },
@@ -2341,32 +1993,15 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Use this for a compact object snapshot: metadata, variables, structure, signature and navigation context. Modular objects accept persisted GUID, EntityKey, or path in addition to name/type. Don't use it when you need full Source or exact part bytes; use genexus_read for that. runtimeIds needs a prior build.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_inspect",
       "inputSchema": {
-        "examples": [
-          {
-            "name": "Customer"
-          },
-          {
-            "name": "Customer",
-            "path": "Operations/Customer",
-            "type": "Procedure"
-          },
-          {
-            "include": [
-              "variables",
-              "signature"
-            ],
-            "name": "Customer"
-          }
-        ],
         "properties": {
           "entityKey": {
-            "description": "Typed GeneXus EntityKey from genexus_list_objects verbose output.",
+            "description": "Typed GeneXus EntityKey from…",
             "type": "string"
           },
           "guid": {
-            "description": "Persisted object GUID from genexus_list_objects.",
+            "description": "Persisted object GUID from…",
             "type": "string"
           },
           "include": {
@@ -2394,11 +2029,11 @@
             "type": "string"
           },
           "path": {
-            "description": "Module/folder-qualified object path from genexus_list_objects.",
+            "description": "Module/folder-qualified object path…",
             "type": "string"
           },
           "projection": {
-            "description": "Token budget. minimal=name/type/lastUpdate; standard=default (vars≤40 name+type, source heads 1200c); verbose=full vars + 8000c heads.",
+            "description": "Token budget.…",
             "enum": [
               "minimal",
               "standard",
@@ -2425,34 +2060,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "IO umbrella for assets, Object Text exchange, screenshots, OCR. action: asset_find|asset_read|asset_write | read_blob | export_part|import_part (single part) | export_kb_to_text|import_text_to_kb|validate_kb_text_files|delete_kb_objects (official GeneXus for Agents Object Text parity) | export_unified|screenshot_publish|ocr.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_io",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "export_kb_to_text",
-            "outputPath": "C:\\tmp\\customer-text",
-            "targets": [
-              {
-                "name": "Customer",
-                "type": "Transaction"
-              }
-            ]
-          },
-          {
-            "action": "validate_kb_text_files",
-            "inputPath": "C:\\tmp\\customer-text"
-          },
-          {
-            "action": "delete_kb_objects",
-            "dryRun": true,
-            "targets": [
-              "Procedure:OldProc"
-            ]
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Asset, single-part, SDK text-tree, batch Object Text, screenshot, or OCR operation.",
+            "description": "Asset, single-part, SDK text-tree,…",
             "enum": [
               "asset_find",
               "asset_read",
@@ -2478,31 +2090,31 @@
             "type": "string"
           },
           "async": {
-            "description": "Run a batch Object Text operation as a cancellable background job when supported.",
+            "description": "Run a batch Object Text operation as a…",
             "type": "boolean"
           },
           "confirm": {
-            "description": "delete_kb_objects: required for a real delete; dryRun remains non-mutating.",
+            "description": "delete_kb_objects: required for a real…",
             "type": "boolean"
           },
           "contentBase64": {
-            "description": "asset_write: base64-encoded file content.",
+            "description": "asset_write: base64-encoded file…",
             "type": "string"
           },
           "dryRun": {
-            "description": "Object Text import/delete preview without persisting changes.",
+            "description": "Object Text import/delete preview…",
             "type": "boolean"
           },
           "enabled": {
-            "description": "text_mirror_set_references: enable/disable reference export.",
+            "description": "text_mirror_set_references:…",
             "type": "boolean"
           },
           "forceSave": {
-            "description": "text import: force the official WriteService persistence path even when the content is unchanged.",
+            "description": "text import: force the official…",
             "type": "boolean"
           },
           "format": {
-            "description": "Object Text export/import format. legacy preserves .gxtext compatibility; native creates the SDK text tree under src/ and ref/ without GX4A DLLs.",
+            "description": "Object Text export/import format.…",
             "enum": [
               "legacy",
               "native"
@@ -2510,18 +2122,18 @@
             "type": "string"
           },
           "full": {
-            "description": "text_mirror_catchup: reconcile the complete indexed KB instead of only queued changes.",
+            "description": "text_mirror_catchup: reconcile the…",
             "type": "boolean"
           },
           "ignore": {
-            "description": "list_text_files/validate_text_in_memory: relative file or directory prefixes to ignore; batch KB actions also accept object selectors.",
+            "description": "list_text_files/validate_text_in_memory…",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "importMissingReferences": {
-            "description": "native import: include reference/dependency files when importing a tree.",
+            "description": "native import: include…",
             "type": "boolean"
           },
           "includeBase64": {
@@ -2530,7 +2142,7 @@
           },
           "includeChildren": {
             "default": true,
-            "description": "filesystem parity: recurse into child directories or expand Module/Folder selectors recursively; default true.",
+            "description": "filesystem parity: recurse into child…",
             "type": "boolean"
           },
           "includeContent": {
@@ -2538,44 +2150,48 @@
             "type": "boolean"
           },
           "includeDependencies": {
-            "description": "native export/import: include Calls/Tables dependency closure under ref/.",
+            "description": "native export/import: include…",
             "type": "boolean"
           },
           "includeModuleMetadata": {
             "default": true,
-            "description": "native export: emit deterministic module.toml metadata for modules represented in src/ref; no package DLL is loaded.",
+            "description": "native export: emit deterministic…",
             "type": "boolean"
           },
           "includeModulePackages": {
-            "description": "native export: copy matching official .opc reference packages from the selected GeneXus installation into ref/; defaults to includeDependencies and never copies DLLs.",
+            "description": "native export: copy matching official…",
+            "type": "boolean"
+          },
+          "includePersistedText": {
+            "description": "Full text; default false.",
             "type": "boolean"
           },
           "includeReferences": {
-            "description": "Alias of includeDependencies for native src/ref exchange.",
+            "description": "Alias of includeDependencies for native…",
             "type": "boolean"
           },
           "includeTableProjections": {
-            "description": "native export: emit official SDK Table structures under src/#tables for selected Transactions; opt-in because tables may be shared/derived.",
+            "description": "native export: emit official SDK Table…",
             "type": "boolean"
           },
           "includeVisualParts": {
-            "description": "native export/import: include WebForm/Layout companions (.web.xml or .report.xml).",
+            "description": "native export/import: include…",
             "type": "boolean"
           },
           "indentString": {
-            "description": "native export: optional prefix applied to non-empty source lines inside the object body; omitted preserves source indentation.",
+            "description": "native export: optional prefix applied…",
             "type": "string"
           },
           "initialSync": {
-            "description": "text_mirror_start: schedule a full catch-up immediately after start.",
+            "description": "text_mirror_start: schedule a full…",
             "type": "boolean"
           },
           "inputPath": {
-            "description": "import_part: source file; import_text_to_kb/validate_kb_text_files: manifest or directory.",
+            "description": "import_part: source file;…",
             "type": "string"
           },
           "intervalMs": {
-            "description": "text_mirror_start: debounce/poll interval in milliseconds (250-600000).",
+            "description": "text_mirror_start: debounce/poll…",
             "minimum": 250,
             "type": "integer"
           },
@@ -2588,7 +2204,7 @@
             "type": "integer"
           },
           "listOnly": {
-            "description": "filesystem parity: return the resolved plan without reading the SDK, writing files or mutating the KB.",
+            "description": "filesystem parity: return the resolved…",
             "type": "boolean"
           },
           "maxBytes": {
@@ -2596,7 +2212,7 @@
             "type": "integer"
           },
           "mode": {
-            "description": "native export mode. all writes every selected object; newAndModified uses the SDK/index version token; newOnly keeps existing files.",
+            "description": "native export mode. all writes every…",
             "enum": [
               "all",
               "newAndModified",
@@ -2609,7 +2225,7 @@
             "type": "string"
           },
           "name": {
-            "description": "single object name or comma-separated selector; export_unified uses one object.",
+            "description": "single object name or comma-separated…",
             "type": "string"
           },
           "outputPath": {
@@ -2621,22 +2237,22 @@
             "type": "boolean"
           },
           "part": {
-            "description": "Object Text or part-exchange part name (e.g. Source, Rules, WebForm). For native format, part=all serializes authored textual parts into one sectioned .gx document.",
+            "description": "Object Text or part-exchange part name…",
             "type": "string"
           },
           "parts": {
-            "description": "native export: explicit authored parts to include in one sectioned .gx document; part=all uses the safe default part set.",
+            "description": "native export: explicit authored parts…",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "path": {
-            "description": "asset/screenshot_publish/ocr: file path; Object Text import/validate may use a manifest directory.",
+            "description": "asset/screenshot_publish/ocr: file…",
             "type": "string"
           },
           "pathPrefix": {
-            "description": "Object Text KB object-path prefix filter.",
+            "description": "Object Text KB object-path prefix…",
             "type": "string"
           },
           "pattern": {
@@ -2649,20 +2265,20 @@
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "native multi-part import: restore parts already written when a later SDK part write fails; reports reconciliationRequired if a prior snapshot cannot be read or restored.",
+            "description": "native multi-part import: restore parts…",
             "type": "boolean"
           },
           "skip": {
-            "description": "filesystem parity: skip this many deterministic planned items before processing; useful for resuming a large batch.",
+            "description": "filesystem parity: skip this many…",
             "minimum": 0,
             "type": "integer"
           },
           "stopOnError": {
-            "description": "filesystem parity: stop after the first item-level error and report remaining work for a safe resume.",
+            "description": "filesystem parity: stop after the first…",
             "type": "boolean"
           },
           "targets": {
-            "description": "Object Text selector array. Items may be names or {name,type} objects. Omit for export_kb_to_text to export the full indexed KB.",
+            "description": "Object Text selector array. Items may…",
             "items": {},
             "type": "array"
           },
@@ -2685,43 +2301,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Manage open KBs, session selection, startup config, Knowledge Base creation, and GeneXus environments. create bootstraps a brand new KB via native MSBuild tasks; list/open/close/select/set_session_default/set_persistent_default/set_default operate on WorkerPool and session context; select sets active KB for current session only without mutating config; set_persistent_default explicitly persists startup default to config.json and returns persistedTo; set_default is a legacy persistent default operation; set_startup/get_startup mirror IDE 'Set As Startup Object'; list_environments lists all configured environments; get_environment reads the active environment; set_environment selects an environment.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_kb",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "open",
-            "path": "C:\\KBs\\MyKb"
-          },
-          {
-            "action": "create",
-            "major": "18",
-            "path": "C:\\KBs\\NewKb"
-          },
-          {
-            "action": "select",
-            "alias": "MyKb"
-          },
-          {
-            "action": "set_persistent_default",
-            "alias": "MyKb"
-          },
-          {
-            "action": "list"
-          },
-          {
-            "action": "list_environments"
-          },
-          {
-            "action": "get_environment"
-          },
-          {
-            "action": "set_environment",
-            "environment": "development"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "KB pool or startup-selection operation to perform.",
+            "description": "KB pool or startup-selection operation…",
             "enum": [
               "list",
               "open",
@@ -2740,27 +2324,27 @@
             "type": "string"
           },
           "alias": {
-            "description": "KB alias. open: auto from path basename if omitted.",
+            "description": "KB alias. open: auto from path basename…",
             "type": "string"
           },
           "dbName": {
-            "description": "create only: target database name (default gx_kb_<name>).",
+            "description": "create only: target database name…",
             "type": "string"
           },
           "dbPassword": {
-            "description": "create only: database password for SQL authentication (optional).",
+            "description": "create only: database password for SQL…",
             "type": "string"
           },
           "dbServer": {
-            "description": "create only: SQL Server instance name (default (LocalDB)\\MSSQLLocalDB).",
+            "description": "create only: SQL Server instance name…",
             "type": "string"
           },
           "dbUser": {
-            "description": "create only: database user for SQL authentication (optional).",
+            "description": "create only: database user for SQL…",
             "type": "string"
           },
           "driver": {
-            "description": "open only: per-KB driver override. Use com-gxpublic for classic GeneXus 8/9 KBs; otherwise omit to resolve the catalog driver.",
+            "description": "open only: per-KB driver override. Use…",
             "enum": [
               "native-sdk",
               "dotnet-reflection",
@@ -2769,47 +2353,47 @@
             "type": "string"
           },
           "dryRun": {
-            "description": "create only: preview KB creation plan without creating directories or running MSBuild (default false).",
+            "description": "create only: preview KB creation plan…",
             "type": "boolean"
           },
           "environment": {
-            "description": "Environment name/folder (required for set_environment), e.g. development.",
+            "description": "Environment name/folder (required for…",
             "type": "string"
           },
           "installationPath": {
-            "description": "open only: per-KB GeneXus installation/provider root. For GX8 this is typically the folder containing gxw32.exe (for example ...\\ARTech\\GeneXus\\gxw80).",
+            "description": "open only: per-KB GeneXus…",
             "type": "string"
           },
           "kb": {
-            "description": "KB alias for environment actions; required when more than one Worker is open.",
+            "description": "KB alias for environment actions;…",
             "type": "string"
           },
           "major": {
-            "description": "open/create: target GeneXus major version, e.g. '8', '16', '17', or '18' (optional). For open, use with driver/installationPath to select a legacy SDK per KB.",
+            "description": "open/create: target GeneXus major…",
             "type": "string"
           },
           "name": {
-            "description": "Object name (required for set_startup) or Knowledge Base name (optional for create, defaults to directory name).",
+            "description": "Object name (required for set_startup)…",
             "type": "string"
           },
           "openAfterCreate": {
-            "description": "create only: automatically open the KB and start a Worker instance after creation (default true).",
+            "description": "create only: automatically open the KB…",
             "type": "boolean"
           },
           "path": {
-            "description": "Absolute KB path (required for create and for open if alias not in config).",
+            "description": "Absolute KB path (required for create…",
             "type": "string"
           },
           "persist": {
-            "description": "Persist KB to config.json for create and legacy set_default (default false for create, default true for set_default).",
+            "description": "Persist KB to config.json for create…",
             "type": "boolean"
           },
           "sdkPath": {
-            "description": "create only: explicit GeneXus SDK installation directory (optional).",
+            "description": "create only: explicit GeneXus SDK…",
             "type": "string"
           },
           "template": {
-            "description": "create only: generator template path or name, e.g. CSharp/csharp.kbtemplate (optional).",
+            "description": "create only: generator template path or…",
             "type": "string"
           }
         },
@@ -2827,14 +2411,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Gateway-only filesystem comparison of two KB directories. Requires kbA and kbB aliases or paths; no active KB selection is used.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_kb_diff",
       "inputSchema": {
-        "examples": [
-          {
-            "kbA": "development",
-            "kbB": "staging"
-          }
-        ],
         "properties": {
           "kbA": {
             "type": "string"
@@ -2858,16 +2436,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Gateway-only filesystem copy of one object between two KB directories. Requires source and object identity; run lifecycle index afterwards.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_kb_import",
       "inputSchema": {
-        "examples": [
-          {
-            "from": "C:\\KBs\\source",
-            "name": "Customer",
-            "to": "C:\\KBs\\target",
-            "type": "Transaction"
-          }
-        ],
         "properties": {
           "from": {
             "type": "string"
@@ -2898,26 +2468,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "SDK KB version tree via KBVersionHelper. list and changed_objects are read-only; changed_objects compares active Design with a frozen version and returns paged NEW/CHANGED items without SQL. Other actions mutate. createdAt may be unavailable; lastUpdate is separate.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_kb_version",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "list"
-          },
-          {
-            "action": "changed_objects",
-            "fromVersion": "v1.0"
-          },
-          {
-            "action": "freeze",
-            "description": "Release 1.0",
-            "name": "v1.0"
-          },
-          {
-            "action": "set_active",
-            "targetVersion": "Trunk"
-          }
-        ],
         "properties": {
           "action": {
             "description": "Version delta or tree operation.",
@@ -2940,11 +2492,11 @@
             "type": "boolean"
           },
           "description": {
-            "description": "New version/branch description (freeze/branch).",
+            "description": "New version/branch description…",
             "type": "string"
           },
           "fromVersion": {
-            "description": "changed_objects frozen baseline; revert source; omit for latest frozen.",
+            "description": "changed_objects frozen baseline; revert…",
             "type": "string"
           },
           "includeEnvironments": {
@@ -2971,11 +2523,11 @@
             "type": "integer"
           },
           "parentVersion": {
-            "description": "Parent version name (freeze/branch). Defaults to the active version.",
+            "description": "Parent version name (freeze/branch).…",
             "type": "string"
           },
           "targetVersion": {
-            "description": "Version to activate (set_active) or revert to (revert).",
+            "description": "Version to activate (set_active) or…",
             "type": "string"
           }
         },
@@ -2993,19 +2545,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Layout/WebForm: get_tree, set_property, find_controls, inspect_surface, scan_mutators. Properties: genexus_properties; structure: genexus_structure get_visual.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_layout",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "get_tree",
-            "name": "WPMain"
-          },
-          {
-            "action": "find_controls",
-            "name": "WPMain",
-            "query": "Button"
-          }
-        ],
         "properties": {
           "action": {
             "description": "Layout/WebForm operation to perform.",
@@ -3026,7 +2567,7 @@
             "type": "string"
           },
           "changes": {
-            "description": "set_properties: batch array of {control, propertyName, value} objects.",
+            "description": "set_properties: batch array of…",
             "items": {
               "properties": {
                 "control": {
@@ -3052,15 +2593,15 @@
             "type": "array"
           },
           "control": {
-            "description": "Control name within the layout or WebForm.",
+            "description": "Control name within the layout or…",
             "type": "string"
           },
           "currentName": {
-            "description": "rename_printblock: existing printblock name.",
+            "description": "rename_printblock: existing printblock…",
             "type": "string"
           },
           "height": {
-            "description": "add_printblock: height of the new printblock.",
+            "description": "add_printblock: height of the new…",
             "type": "integer"
           },
           "kb": {
@@ -3068,11 +2609,11 @@
             "type": "string"
           },
           "limit": {
-            "description": "find_controls/list_controls: maximum results to return.",
+            "description": "find_controls/list_controls: maximum…",
             "type": "integer"
           },
           "name": {
-            "description": "Target object name (WebPanel, Transaction, Procedure).",
+            "description": "Target object name (WebPanel,…",
             "type": "string"
           },
           "newName": {
@@ -3080,19 +2621,19 @@
             "type": "string"
           },
           "printBlockName": {
-            "description": "add_printblock/delete_printblock: name of the printblock.",
+            "description": "add_printblock/delete_printblock: name…",
             "type": "string"
           },
           "propertyName": {
-            "description": "Property name to modify (e.g. Caption, Visible, Enabled, Class).",
+            "description": "Property name to modify (e.g. Caption,…",
             "type": "string"
           },
           "query": {
-            "description": "find_controls: search query matching control names or captions.",
+            "description": "find_controls: search query matching…",
             "type": "string"
           },
           "value": {
-            "description": "Value to assign to the specified property.",
+            "description": "Value to assign to the specified…",
             "type": "string"
           }
         },
@@ -3110,30 +2651,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Build, validate, index, or poll the KB. action=build_all runs the native incremental Build All for the entire selected KB (ForceRebuild=false); it rejects target, refuses silent reorganization, and returns completion evidence. action=rebuild remains the forced Rebuild All path. action=specify runs Spec+Gen only. action=build with mode=compile_check checks targets plus transitive callers without KB-wide DeveloperMenu regeneration. Long operations are async with operationId. dryRun=true previews without executing. Build results carry generateEvidence and effective_status. See genexus://kb/tool-help/genexus_lifecycle for actions and target formats.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_lifecycle",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "build"
-          },
-          {
-            "action": "build_all"
-          },
-          {
-            "action": "status",
-            "target": "op:abc123"
-          },
-          {
-            "action": "build",
-            "mode": "compile_check",
-            "target": "MyObject"
-          },
-          {
-            "action": "inspect",
-            "operationKey": "edit_20260905_01",
-            "operationTool": "genexus_edit"
-          }
-        ],
         "properties": {
           "action": {
             "description": "Lifecycle action to perform.",
@@ -3159,56 +2678,56 @@
             "type": "string"
           },
           "buildPlanCap": {
-            "description": "Build: max nodes before BuildPlanTooLarge (default 200).",
+            "description": "Build: max nodes before…",
             "type": "integer"
           },
           "callerCap": {
-            "description": "compile_check: max callers to pull into the check (default 40). Closure beyond this is truncated and flagged.",
+            "description": "compile_check: max callers to pull into…",
             "type": "integer"
           },
           "callers": {
-            "description": "compile_check: expand transitive callers of the target (default true). Set false for a target-only check when the target is a base transaction/BC with a huge caller closure.",
+            "description": "compile_check: expand transitive…",
             "type": "boolean"
           },
           "code": {
-            "description": "validate: in-memory code to check without persisting.",
+            "description": "validate: in-memory code to check…",
             "type": "string"
           },
           "compact": {
-            "description": "Status: counts + top-10 errors (default true).",
+            "description": "Status: counts + top-10 errors (default…",
             "type": "boolean"
           },
           "confirmed": {
-            "description": "reconcile: must be true after independently reading the affected target; this never authorizes a retry with the same key.",
+            "description": "reconcile: must be true after…",
             "type": "boolean"
           },
           "deploy": {
-            "description": "Build: force the full deploy (Theme/Image/Style/Module copy to web/bin + WebAppConfig) so the built object is runnable, not just compiled. Default false (fast compile-only path). Slower; use when you need to run/preview the object.",
+            "description": "Build: force the full deploy…",
             "type": "boolean"
           },
           "dryRun": {
             "default": false,
-            "description": "build/build_all/rebuild/index: returns the plan without executing.",
+            "description": "build/build_all/rebuild/index: returns…",
             "type": "boolean"
           },
           "environment": {
-            "description": "Build: target environment name/folder. Switches active environment before building.",
+            "description": "Build: target environment name/folder.…",
             "type": "string"
           },
           "estimated_seconds": {
-            "description": "Build: <20 sync, >=20 async (default 60).",
+            "description": "Build: <20 sync, >=20 async (default…",
             "type": "integer"
           },
           "fastIncremental": {
-            "description": "build: experimental fast incremental build opt-in.",
+            "description": "build: experimental fast incremental…",
             "type": "boolean"
           },
           "force": {
-            "description": "Index: full SDK rescan (clears snapshot).",
+            "description": "Index: full SDK rescan (clears…",
             "type": "boolean"
           },
           "freshness": {
-            "description": "Status: freshness target for the wait. With wait and no since, the call blocks until the index status is Ready AND freshness matches, then reports waitSatisfied. Use freshness=current to wait for a warm-start delta refresh to finish (a snapshot restored from the warm cache is Ready but stale, so a status-only wait returns immediately).",
+            "description": "Status: freshness target for the wait.…",
             "enum": [
               "current",
               "stale",
@@ -3217,7 +2736,7 @@
             "type": "string"
           },
           "includeCallees": {
-            "description": "Build: expand call graph so callees compile first (default transitive).",
+            "description": "Build: expand call graph so callees…",
             "enum": [
               "none",
               "direct",
@@ -3230,77 +2749,77 @@
             "type": "string"
           },
           "limit": {
-            "description": "validate-kb: maximum number of objects/conditions to validate.",
+            "description": "validate-kb: maximum number of…",
             "type": "integer"
           },
           "mode": {
-            "description": "With action=build: compile_check spec+gen+compiles target(s) plus their transitive callers and SKIPS the KB-wide DeveloperMenu regen (the dominant build-all cost). Fast 'did my edit break the build?' check; requires target.",
+            "description": "With action=build: compile_check…",
             "enum": [
               "compile_check"
             ],
             "type": "string"
           },
           "notifyOnFailure": {
-            "description": "build: Slack/Discord webhook URL to notify on terminal build failure.",
+            "description": "build: Slack/Discord webhook URL to…",
             "type": "string"
           },
           "observedRevision": {
-            "description": "reconcile: revision/version observed by an independent read; must match the durable revision fence.",
+            "description": "reconcile: revision/version observed by…",
             "type": "string"
           },
           "observedTargetIds": {
-            "description": "reconcile: target names observed by an independent read; send one name as a single-item array. Must match the durable target fence.",
+            "description": "reconcile: target names observed by an…",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "operationKey": {
-            "description": "inspect/reconcile: original idempotency key; journal lookup is hash-scoped to the resolved KB.",
+            "description": "inspect/reconcile: original idempotency…",
             "type": "string"
           },
           "operationTool": {
-            "description": "inspect/reconcile: canonical mutating tool that owns the idempotency key, e.g. genexus_edit.",
+            "description": "inspect/reconcile: canonical mutating…",
             "type": "string"
           },
           "page": {
-            "description": "status/result: 1-based page number for paginated results.",
+            "description": "status/result: 1-based page number for…",
             "type": "integer"
           },
           "pageSize": {
-            "description": "status/result: page size for paginated results (default 50).",
+            "description": "status/result: page size for paginated…",
             "type": "integer"
           },
           "page_size": {
-            "description": "status/result: snake_case alias for pageSize.",
+            "description": "status/result: snake_case alias for…",
             "type": "integer"
           },
           "part": {
-            "description": "validate: specific object part to check (e.g. Source, Rules).",
+            "description": "validate: specific object part to check…",
             "type": "string"
           },
           "since": {
-            "description": "Status: prior _meta.snapshot for chained waits.",
+            "description": "Status: prior _meta.snapshot for…",
             "type": "string"
           },
           "skipFullDeploy": {
-            "description": "build: skip full deployment stage to speed up compile pass.",
+            "description": "build: skip full deployment stage to…",
             "type": "boolean"
           },
           "snapshotPath": {
-            "description": "snapshots-restore: path to pattern snapshot to restore.",
+            "description": "snapshots-restore: path to pattern…",
             "type": "string"
           },
           "target": {
-            "description": "Object/task ID/op:<id>. compile_check accepts unique name, Type:Name, GUID; no paths. build_all rejects target.",
+            "description": "Object/task ID/op:<id>. compile_check…",
             "type": "string"
           },
           "verification": {
-            "description": "reconcile: short operator/model verification statement. Only a hash is persisted; source and KB content are never journaled.",
+            "description": "reconcile: short operator/model…",
             "type": "string"
           },
           "wait": {
-            "description": "Status block, 0-600s. With a build taskId (or since): event-driven, returns on change. On index status with no since: blocks until index is Ready.",
+            "description": "Status block, 0-600s. With a build…",
             "type": "integer"
           },
           "wait_seconds": {
@@ -3308,7 +2827,7 @@
             "type": "integer"
           },
           "wait_until_done": {
-            "description": "Build/build_all/rebuild: block in one turn until terminal (up to wait_seconds, default 600).",
+            "description": "Build/build_all/rebuild: block in one…",
             "type": "boolean"
           }
         },
@@ -3355,17 +2874,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List objects with pagination. Feed nextOffset until hasMore=false. Every item exposes its persisted GUID and path; verbose=true also exposes the typed EntityKey when available.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_list_objects",
       "inputSchema": {
-        "examples": [
-          {
-            "limit": 25
-          },
-          {
-            "limit": 10,
-            "typeFilter": "Transaction"
-          }
-        ],
         "properties": {
           "axiCompact": {
             "default": true,
@@ -3373,7 +2883,7 @@
             "type": "boolean"
           },
           "cursor": {
-            "description": "Opaque token from prior nextCursor. Use with sort=lastUpdate for stable paging.",
+            "description": "Opaque token from prior nextCursor. Use…",
             "type": "string"
           },
           "descriptionFilter": {
@@ -3381,7 +2891,7 @@
             "type": "string"
           },
           "filter": {
-            "description": "Legacy: name OR description. Prefer nameFilter/descriptionFilter.",
+            "description": "Legacy: name OR description. Prefer…",
             "type": "string"
           },
           "inline_read_top": {
@@ -3396,7 +2906,7 @@
             "type": "integer"
           },
           "modifiedBefore": {
-            "description": "ISO-8601 UTC. Only items with lastUpdate < modifiedBefore.",
+            "description": "ISO-8601 UTC. Only items with…",
             "type": "string"
           },
           "nameFilter": {
@@ -3417,7 +2927,7 @@
             "type": "string"
           },
           "projection": {
-            "description": "minimal=name+type+lastUpdate; standard=default compact; verbose=all fields. Overrides axiCompact when set.",
+            "description": "minimal=name+type+lastUpdate;…",
             "enum": [
               "minimal",
               "standard",
@@ -3426,11 +2936,11 @@
             "type": "string"
           },
           "since": {
-            "description": "ISO-8601 UTC. Only items with lastUpdate >= since.",
+            "description": "ISO-8601 UTC. Only items with…",
             "type": "string"
           },
           "sort": {
-            "description": "name (default, type-bucketed) or lastUpdate (newest first).",
+            "description": "name (default, type-bucketed) or…",
             "enum": [
               "name",
               "lastUpdate"
@@ -3456,31 +2966,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Per-KB fact store. action: save (fact required; optional target/type/tags; dedups on identical fact+object, bumping a hit count) | recall (filter by target/type/tags — ANY match; no filter returns all) | list (all, newest first) | forget (tombstone by id) | promote (lift a friction-log message into a memory, tagged 'friction') | consolidate (dreaming — merge redundant/overlapping facts within scope; dryRun=true previews, dryRun=false compacts memory.jsonl). Persisted to .gx/memory/memory.jsonl.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_memory",
       "inputSchema": {
         "additionalProperties": false,
-        "examples": [
-          {
-            "action": "save",
-            "fact": "Customer.Email must be unique",
-            "tags": [
-              "validation"
-            ],
-            "target": "Customer",
-            "type": "Transaction"
-          },
-          {
-            "action": "recall",
-            "target": "Customer"
-          },
-          {
-            "action": "consolidate",
-            "dryRun": true
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Persistent agent-memory operation to perform.",
+            "description": "Persistent agent-memory operation to…",
             "enum": [
               "save",
               "recall",
@@ -3492,7 +2983,7 @@
             "type": "string"
           },
           "dryRun": {
-            "description": "consolidate: true previews proposed merges without writing; false (default) applies and compacts memory.jsonl.",
+            "description": "consolidate: true previews proposed…",
             "type": "boolean"
           },
           "fact": {
@@ -3505,7 +2996,7 @@
             "type": "string"
           },
           "message": {
-            "description": "promote: friction text to promote into a memory.",
+            "description": "promote: friction text to promote into…",
             "type": "string"
           },
           "tags": {
@@ -3538,28 +3029,16 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Merge two (or three, with an ancestor) KB objects via the SDK's IMergeService. mode=objects only (mode=models is unsupported — needs multiple KBModel instances not available in this worker). Omit objectBase for a 2-way merge (ignoreConflicts applies); pass objectBase for a 3-way merge. dryRun (default true) reports what would merge via IComparerService WITHOUT writing; dryRun=false performs the merge and saves it. WRITE + destructive.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_merge",
       "inputSchema": {
-        "examples": [
-          {
-            "objectLeft": "Customer",
-            "objectRight": "CustomerV2"
-          },
-          {
-            "dryRun": false,
-            "objectBase": "CustomerBase",
-            "objectLeft": "Customer",
-            "objectRight": "CustomerV2"
-          }
-        ],
         "properties": {
           "dryRun": {
             "default": true,
-            "description": "true (default): report-only, no SDK MergeObjects call, nothing written. false: perform the merge and save it.",
+            "description": "true (default): report-only, no SDK…",
             "type": "boolean"
           },
           "ignoreConflicts": {
-            "description": "2-way merge only: let the SDK auto-resolve conflicting parts instead of failing. Default false.",
+            "description": "2-way merge only: let the SDK…",
             "type": "boolean"
           },
           "kb": {
@@ -3574,7 +3053,7 @@
             "type": "string"
           },
           "objectBase": {
-            "description": "Optional common ancestor. Omit for a 2-way merge; pass for a 3-way merge.",
+            "description": "Optional common ancestor. Omit for a…",
             "type": "string"
           },
           "objectLeft": {
@@ -3584,7 +3063,7 @@
             "type": "string"
           },
           "type": {
-            "description": "Object type filter applied to all lookups, e.g. 'Transaction'.",
+            "description": "Object type filter applied to all…",
             "type": "string"
           }
         },
@@ -3603,20 +3082,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "GeneXus Module Manager over the SDK's IModuleManagerService. action=list (read-only: installed Module KB objects) | install (opcFile=<path to .opc file>, or name[+version] to install a named module) | install_builtin (name=<built-in module>) | update (name+version) | package/publish/restore (module lifecycle) | add_modules_server/search_modules_in_servers (configured module servers). install/install_builtin/update accept dryRun=true for a read-only preview (package identity, dependencies, affected modules) without calling the SDK install.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_module",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "list"
-          },
-          {
-            "action": "install_builtin",
-            "name": "GeneXusGAM"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Module Manager operation to inspect, install, or update a module.",
+            "description": "Module Manager operation to inspect,…",
             "enum": [
               "install",
               "install_builtin",
@@ -3632,15 +3102,15 @@
             "type": "string"
           },
           "confirm": {
-            "description": "Required for restore/publish/package when the operation changes KB or publishes externally.",
+            "description": "Required for restore/publish/package…",
             "type": "boolean"
           },
           "dryRun": {
-            "description": "install/install_builtin/update: when true, returns a read-only preview (package identity, dependencies, affected modules) without calling the SDK install.",
+            "description": "install/install_builtin/update: when…",
             "type": "boolean"
           },
           "filter": {
-            "description": "search_modules_in_servers: module name/version filter.",
+            "description": "search_modules_in_servers: module…",
             "type": "string"
           },
           "kb": {
@@ -3648,11 +3118,11 @@
             "type": "string"
           },
           "name": {
-            "description": "install (by name)/install_builtin/update: module name.",
+            "description": "install (by…",
             "type": "string"
           },
           "opcFile": {
-            "description": "install: absolute path to a .opc module package file.",
+            "description": "install: absolute path to a .opc module…",
             "type": "string"
           },
           "outputDirectory": {
@@ -3660,19 +3130,19 @@
             "type": "string"
           },
           "outputPath": {
-            "description": "package: output directory; publish: output .opc file.",
+            "description": "package: output directory; publish:…",
             "type": "string"
           },
           "preserveConfiguration": {
-            "description": "add_modules_server: preserve the existing server configuration when supported.",
+            "description": "add_modules_server: preserve the…",
             "type": "boolean"
           },
           "rebuild": {
-            "description": "package: include a rebuild before packaging.",
+            "description": "package: include a rebuild before…",
             "type": "boolean"
           },
           "server": {
-            "description": "restore/search_modules_in_servers: configured module server name.",
+            "description": "restore/search_modules_in_servers:…",
             "type": "string"
           },
           "serverType": {
@@ -3686,11 +3156,11 @@
             "type": "string"
           },
           "source": {
-            "description": "add_modules_server: server URL or directory source.",
+            "description": "add_modules_server: server URL or…",
             "type": "string"
           },
           "version": {
-            "description": "install (by name)/update: target module version.",
+            "description": "install (by name)/update: target module…",
             "type": "string"
           }
         },
@@ -3708,19 +3178,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "View navigation report (IDE Right-click → View Navigation). latest=true reads the most recent report from .gx/navigation-cache; latest=false runs fresh and refreshes that per-KB cache.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_navigation",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "view",
-            "name": "Customer"
-          },
-          {
-            "action": "view",
-            "latest": true,
-            "name": "Customer"
-          }
-        ],
         "properties": {
           "action": {
             "description": "Navigation report operation to execute.",
@@ -3735,7 +3194,7 @@
           },
           "latest": {
             "default": false,
-            "description": "Read the most recent cached navigation when true; when false, run fresh and refresh the per-KB navigation cache.",
+            "description": "Read the most recent cached navigation…",
             "type": "boolean"
           },
           "name": {
@@ -3757,37 +3216,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Read/update object properties. action=get|set|move. move snapshots every part, checks baseVersion, verifies in and after the SDK transaction, rolls back divergence. Use destination (or folder/module aliases) for a Folder/Module or targetModule; destKind disambiguates equal names. dryRun does not save or change the token. Move never runs lifecycle or tests. Description is the WebPanel/Popup title-bar text. Use genexus_layout set_property for layout controls.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_properties",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "get",
-            "name": "MyPanel",
-            "propertyName": "Description"
-          },
-          {
-            "action": "get",
-            "name": "MyDomain",
-            "query": "*Type*"
-          },
-          {
-            "action": "get",
-            "name": "MyDomain",
-            "projection": "minimal"
-          },
-          {
-            "action": "move",
-            "baseVersion": "<versionToken from genexus_read>",
-            "dryRun": true,
-            "name": "InvoiceHelper",
-            "rollbackOnFailure": true,
-            "targetModule": "operacional",
-            "type": "Procedure"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Object-property operation to read or change metadata or move the object.",
+            "description": "Object-property operation to read or…",
             "enum": [
               "get",
               "set",
@@ -3796,15 +3229,15 @@
             "type": "string"
           },
           "baseVersion": {
-            "description": "move: opaque optimistic concurrency token returned by a prior read.",
+            "description": "move: opaque optimistic concurrency…",
             "type": "string"
           },
           "control": {
-            "description": "Optional. Layout control name (e.g. BtnConfirmar), variable name with & prefix (e.g. &Alu2RegProf), or attribute name.",
+            "description": "Optional layout control, variable…",
             "type": "string"
           },
           "destKind": {
-            "description": "move: disambiguate when a Folder and Module share a name.",
+            "description": "move: disambiguate when a Folder and…",
             "enum": [
               "Folder",
               "Module"
@@ -3812,15 +3245,15 @@
             "type": "string"
           },
           "destination": {
-            "description": "move: target Folder/Module name (auto-detects kind).",
+            "description": "move: target Folder/Module name…",
             "type": "string"
           },
           "dryRun": {
-            "description": "move: preview from/to and preserved parts without persisting.",
+            "description": "move: preview from/to and preserved…",
             "type": "boolean"
           },
           "folder": {
-            "description": "move: destination alias with Folder kind.",
+            "description": "move: destination alias with Folder…",
             "type": "string"
           },
           "kb": {
@@ -3828,14 +3261,14 @@
             "type": "string"
           },
           "module": {
-            "description": "move: destination alias with Module kind.",
+            "description": "move: destination alias with Module…",
             "type": "string"
           },
           "name": {
             "type": "string"
           },
           "projection": {
-            "description": "action=get: compact property subset (minimal, standard, full). Defaults to full.",
+            "description": "action=get: compact property subset…",
             "enum": [
               "minimal",
               "standard",
@@ -3844,38 +3277,57 @@
             "type": "string"
           },
           "properties": {
-            "description": "Batch set: map of propertyName to value applied in 1 transaction.",
+            "description": "Batch set: map of propertyName to value…",
             "type": "object"
           },
           "propertyName": {
-            "description": "Filter for action=get (single property, comma-separated, or * wildcard); property to change for action=set.",
+            "description": "get: property name/list/wildcard…",
             "type": "string"
           },
           "propertyNames": {
-            "description": "action=get: list of property names to return.",
+            "description": "action=get: list of property names to…",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "query": {
-            "description": "action=get: filter property names by substring or * wildcard.",
+            "description": "get: substring or * wildcard filter for…",
             "type": "string"
           },
           "rollbackOnFailure": {
-            "description": "move: attempt compensating snapshot restoration if the SDK transaction rollback is insufficient (default true). set+validationMode=specify: request rollback after validation failure.",
+            "description": "move: attempt compensating snapshot…",
             "type": "boolean"
           },
           "targetModule": {
-            "description": "move: typed alias for a Module destination.",
+            "description": "move: typed alias for a Module…",
             "type": "string"
           },
+          "targets": {
+            "description": "action=get: read up to 100 objects in…",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "type": {
-            "description": "Optional object type disambiguator.",
+            "description": "Optional object type disambiguator;…",
             "type": "string"
           },
           "validationMode": {
-            "description": "Issue #60: with action=set, run the inline Specify pass (Spec+Gen, no Compile) after the property write, returning structured spc*/gen* diagnostics in the same call. Combines with rollbackOnFailure.",
+            "description": "set: run inline Specify (Spec+Gen, no…",
             "enum": [
               "specify"
             ],
@@ -3886,8 +3338,7 @@
           }
         },
         "required": [
-          "action",
-          "name"
+          "action"
         ],
         "type": "object"
       },
@@ -3900,17 +3351,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Search objects in active KB. Prefixes: name:, type:, usedby:, parent:, parentPath:, description:. name:\"X\" (or bare quoted \"X\") demands exact-name match — use it when you know the object's name. Compact by default. See genexus://kb/tool-help/genexus_query. Requires the KB index to be Ready — check genexus_lifecycle action=status if results look empty.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_query",
       "inputSchema": {
-        "examples": [
-          {
-            "query": "type:Transaction parent:Customers"
-          },
-          {
-            "limit": 5,
-            "query": "\"Customer\""
-          }
-        ],
         "properties": {
           "axiCompact": {
             "default": true,
@@ -3918,7 +3360,7 @@
             "type": "boolean"
           },
           "cursor": {
-            "description": "Opaque token from prior nextCursor. Use with sort=lastUpdate for stable paging.",
+            "description": "Opaque token from prior nextCursor. Use…",
             "type": "string"
           },
           "domainFilter": {
@@ -3940,18 +3382,18 @@
             "type": "integer"
           },
           "modifiedBefore": {
-            "description": "ISO-8601 UTC. Only items with lastUpdate < modifiedBefore.",
+            "description": "ISO-8601 UTC. Only items with…",
             "type": "string"
           },
           "query": {
             "type": "string"
           },
           "since": {
-            "description": "ISO-8601 UTC. Only items with lastUpdate >= since.",
+            "description": "ISO-8601 UTC. Only items with…",
             "type": "string"
           },
           "sort": {
-            "description": "relevance (default) or lastUpdate (newest first; bypasses score ranking).",
+            "description": "relevance (default) or lastUpdate…",
             "enum": [
               "relevance",
               "lastUpdate"
@@ -3976,34 +3418,15 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Read object code and metadata. Omitting 'part' (RECOMMENDED) returns the COMPLETE object in 1 call (rules with parm, source/events, variables, structure, called signatures) tailored to the object type. Resolve modular objects by name/type, persisted GUID, EntityKey, or path. Pass 'part' only for targeted single-part reads. Response carries versionToken for safe writes. See genexus://kb/tool-help/genexus_read.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_read",
       "inputSchema": {
-        "examples": [
-          {
-            "name": "Customer"
-          },
-          {
-            "guid": "<guid-from-list>",
-            "name": "Customer",
-            "type": "Procedure"
-          },
-          {
-            "name": "Customer",
-            "path": "Operations/Customer",
-            "type": "Procedure"
-          },
-          {
-            "name": "Customer",
-            "part": "Source"
-          }
-        ],
         "properties": {
           "entityKey": {
-            "description": "Typed GeneXus EntityKey from genexus_list_objects verbose output.",
+            "description": "Typed GeneXus EntityKey from…",
             "type": "string"
           },
           "guid": {
-            "description": "Persisted object GUID from genexus_list_objects.",
+            "description": "Persisted object GUID from…",
             "type": "string"
           },
           "kb": {
@@ -4020,18 +3443,18 @@
             "type": "integer"
           },
           "part": {
-            "description": "DataSelector: parameters|conditions|orders|projection|definedBy|baseTransaction|baseTable|joins|structure.",
+            "description": "DataSelector:…",
             "type": "string"
           },
           "parts": {
-            "description": "Selected parts; unavailable DataSelector parts appear in unsupportedParts. Mutually exclusive with part/offset/limit.",
+            "description": "Selected parts; unavailable…",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "path": {
-            "description": "Module/folder-qualified object path from genexus_list_objects.",
+            "description": "Module/folder-qualified object path…",
             "type": "string"
           },
           "targets": {
@@ -4055,22 +3478,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Named playbooks + self-extending macros. action=list|describe|suggest_macro|crystallize.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_recipe",
       "inputSchema": {
-        "examples": [
-          {
-            "name": "list"
-          },
-          {
-            "name": "wwp_on_transaction"
-          },
-          {
-            "action": "suggest_macro"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "list: show recipes; describe: inspect recipe; suggest_macro: detect repeated sequences; crystallize: save sequence as recipe.",
+            "description": "list: show recipes; describe: inspect…",
             "enum": [
               "list",
               "describe",
@@ -4084,7 +3496,7 @@
             "type": "string"
           },
           "macroName": {
-            "description": "crystallize: proposed name from suggest_macro.",
+            "description": "crystallize: proposed name from…",
             "type": "string"
           },
           "minRepetitions": {
@@ -4092,11 +3504,11 @@
             "type": "integer"
           },
           "name": {
-            "description": "Recipe key (latest version), 'name@v1' (pinned), or 'list'.",
+            "description": "Recipe key (latest version), 'name@v1'…",
             "type": "string"
           },
           "steps": {
-            "description": "crystallize: ordered array of tool call steps to include in the macro.",
+            "description": "crystallize: ordered array of tool call…",
             "items": {
               "description": "Tool call step object or template.",
               "type": "object"
@@ -4104,7 +3516,7 @@
             "type": "array"
           },
           "windowMinutes": {
-            "description": "suggest_macro: history window (default 30).",
+            "description": "suggest_macro: history window (default…",
             "type": "integer"
           }
         },
@@ -4119,29 +3531,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Run GeneXus refactor: rename, extract procedure, extract local subroutine, or WWP condition set. For KB-wide rename with call-site patching (RenameObject/RenameAttribute), the response includes a patched-site count from RefactorService. dryRun=true previews what would change without persisting.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_refactor",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "RenameObject",
-            "newName": "Client",
-            "target": "Customer"
-          },
-          {
-            "action": "RenameAttribute",
-            "newName": "ClientId",
-            "target": "CustomerId"
-          },
-          {
-            "action": "ExtractSubroutine",
-            "code": "&Total = 0",
-            "subroutineName": "ResetTotal",
-            "target": "Customer"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Refactoring operation to execute; rename and extraction actions change KB source or metadata.",
+            "description": "Refactoring operation to execute;…",
             "enum": [
               "RenameAttribute",
               "RenameVariable",
@@ -4153,16 +3547,16 @@
             "type": "string"
           },
           "code": {
-            "description": "ExtractProcedure/ExtractSubroutine: code block to extract.",
+            "description": "ExtractProcedure/ExtractSubroutine:…",
             "type": "string"
           },
           "controlAttribute": {
-            "description": "WWPSetCondition: control or attribute name to attach condition.",
+            "description": "WWPSetCondition: control or attribute…",
             "type": "string"
           },
           "dryRun": {
             "default": false,
-            "description": "When true, returns what would be changed without persisting.",
+            "description": "When true, returns what would be…",
             "type": "boolean"
           },
           "kb": {
@@ -4170,19 +3564,19 @@
             "type": "string"
           },
           "newName": {
-            "description": "New name for the renamed object, attribute, or variable.",
+            "description": "New name for the renamed object,…",
             "type": "string"
           },
           "objectName": {
-            "description": "RenameVariable: target object name containing the variable.",
+            "description": "RenameVariable: target object name…",
             "type": "string"
           },
           "procedureName": {
-            "description": "ExtractProcedure: name for the newly created Procedure.",
+            "description": "ExtractProcedure: name for the newly…",
             "type": "string"
           },
           "subroutineName": {
-            "description": "ExtractSubroutine: name for the newly created Subroutine.",
+            "description": "ExtractSubroutine: name for the newly…",
             "type": "string"
           },
           "target": {
@@ -4190,11 +3584,11 @@
             "type": "string"
           },
           "type": {
-            "description": "RenameObject: object type (e.g. WebPanel, Transaction, Procedure) to disambiguate when several objects share the name — e.g. a WebPanel vs the same-named Table behind a Transaction. Ignored by RenameAttribute/RenameVariable.",
+            "description": "RenameObject: object type (e.g.…",
             "type": "string"
           },
           "value": {
-            "description": "WWPSetCondition: condition expression to set.",
+            "description": "WWPSetCondition: condition expression…",
             "type": "string"
           }
         },
@@ -4212,19 +3606,8 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "Resolve runtime URL for an object (webRoot + aspx + encoded args). gamSession='auto'|{user,pass,...} captures GAM cookies. Does NOT open a browser. dryRun=true returns the resolved URL without performing GAM login.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_run_object",
       "inputSchema": {
-        "examples": [
-          {
-            "name": "WPMain"
-          },
-          {
-            "args": [
-              "42"
-            ],
-            "name": "WPCustomer"
-          }
-        ],
         "properties": {
           "args": {
             "description": "Positional parameter values.",
@@ -4235,11 +3618,11 @@
           },
           "dryRun": {
             "default": false,
-            "description": "When true, returns the resolved URL without performing the GAM login step.",
+            "description": "When true, returns the resolved URL…",
             "type": "boolean"
           },
           "gamSession": {
-            "description": "'auto' (use GXMCP_GAM_USER/PASS env) or {user, pass, repository?, loginUrl?}."
+            "description": "'auto' (use GXMCP_GAM_USER/PASS env) or…"
           },
           "kb": {
             "description": "KB alias.",
@@ -4263,22 +3646,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Gateway-only filesystem sandbox management; clone or remove a KB directory without SDK dispatch.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_sandbox",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "create",
-            "from": "C:\\KBs\\base",
-            "name": "probe"
-          },
-          {
-            "action": "remove",
-            "name": "probe"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Sandbox operation to create or remove a KB directory.",
+            "description": "Sandbox operation to create or remove a…",
             "enum": [
               "create",
               "remove"
@@ -4310,21 +3682,15 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Read the GeneXus SDK surface. mode=surface dumps types/methods/props to docs/sdk-probe/; mode=capabilities returns an in-memory capability matrix with honest signature-probe status.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_sdk_probe",
       "inputSchema": {
-        "examples": [
-          {},
-          {
-            "mode": "capabilities"
-          }
-        ],
         "properties": {
           "kb": {
             "description": "KB alias.",
             "type": "string"
           },
           "mode": {
-            "description": "surface (default) writes the diagnostic probe; capabilities is read-only and returns status/evidence.",
+            "description": "surface (default) writes the diagnostic…",
             "enum": [
               "surface",
               "capabilities"
@@ -4332,7 +3698,7 @@
             "type": "string"
           },
           "outputDir": {
-            "description": "Absolute path for mode=surface. Default <repo>/docs/sdk-probe/.",
+            "description": "Absolute path for mode=surface. Default…",
             "type": "string"
           }
         },
@@ -4347,40 +3713,31 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Regex/semantic search across Procedure/DataProvider/WebPanel/Transaction source. Restrict a scan by object name, persisted GUID, EntityKey, or module/folder-qualified path. Requires the KB index to be Ready — check genexus_lifecycle action=status if results look empty.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_search_source",
       "inputSchema": {
-        "examples": [
-          {
-            "pattern": "ControlType=\"Radio\""
-          },
-          {
-            "maxResults": 20,
-            "pattern": "for each",
-            "typeFilter": "Procedure"
-          }
-        ],
+        "additionalProperties": false,
         "properties": {
           "argMatches": {
-            "description": "Positional arg index to expected literal text.",
+            "description": "Positional arg index to expected…",
             "type": "object"
           },
           "callee": {
-            "description": "Method/function name (qualified or unqualified).",
+            "description": "Method/function name (qualified or…",
             "type": "string"
           },
           "caseSensitive": {
             "type": "boolean"
           },
           "cursor": {
-            "description": "Opaque continuation token from nextCursor; preferred when a result page ended inside an object. Do not edit.",
+            "description": "Opaque continuation token from…",
             "type": "string"
           },
           "entityKey": {
-            "description": "Typed GeneXus EntityKey from genexus_list_objects verbose output.",
+            "description": "Typed GeneXus EntityKey from…",
             "type": "string"
           },
           "fields": {
-            "description": "Whole-field metadata match (returns matchedValue, no line context). Default [source]. Prefer scope=[webForm] for line-context WebForm hits; use fields=[webForm] only for a coarse contains-match.",
+            "description": "Whole-field metadata match (returns…",
             "items": {
               "enum": [
                 "source",
@@ -4394,14 +3751,14 @@
             "type": "array"
           },
           "guid": {
-            "description": "Persisted object GUID from genexus_list_objects.",
+            "description": "Persisted object GUID from…",
             "type": "string"
           },
           "includeComments": {
             "type": "boolean"
           },
           "inline_read_top": {
-            "description": "0-3. Inline reads of top N distinct objects in response.",
+            "description": "0-3. Inline reads of top N distinct…",
             "type": "integer"
           },
           "kb": {
@@ -4412,18 +3769,18 @@
             "type": "integer"
           },
           "objectName": {
-            "description": "Restrict the scan to these exact object name(s), comma-separated. Makes a search inside one known object O(object) not O(KB), and bypasses the type whitelist.",
+            "description": "Restrict the scan to these exact object…",
             "type": "string"
           },
           "path": {
-            "description": "Module/folder-qualified object path from genexus_list_objects.",
+            "description": "Module/folder-qualified object path…",
             "type": "string"
           },
           "pattern": {
             "type": "string"
           },
           "scope": {
-            "description": "Parts to scan with line-numbered context. Default [source]. webForm/layout scans the WebPanel/Transaction visual XML (control names, captions, classes, bindings).",
+            "description": "Parts to scan with line-numbered…",
             "items": {
               "enum": [
                 "source",
@@ -4438,11 +3795,11 @@
             "type": "array"
           },
           "startIndex": {
-            "description": "Legacy object-boundary resume. For a page that ended inside an object, prefer the opaque cursor returned in nextCursor.",
+            "description": "Legacy object-boundary resume. For a…",
             "type": "integer"
           },
           "timeoutMs": {
-            "description": "Wall-clock budget (default 30000). Raise it to scan more objects per call.",
+            "description": "Wall-clock budget (default 30000).…",
             "type": "integer"
           },
           "typeFilter": {
@@ -4460,19 +3817,11 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Audit KB security. action=audit_gam scans GAM/env props; action=scan_secrets greps Source for credential-shaped literals; action=scan_native drives the native GeneXus Security Scanner (ISecurityScannerService). Returns findings with severity.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_security",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "audit_gam"
-          },
-          {
-            "action": "scan_secrets"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "audit_gam: scans GAM and environment properties; scan_secrets: greps Source for credentials; scan_native: drives native GeneXus Security Scanner.",
+            "description": "audit_gam: scans GAM and environment…",
             "enum": [
               "audit_gam",
               "scan_secrets",
@@ -4499,79 +3848,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Read or write the structure/data-model of GeneXus objects. update_visual now snapshots every part, checks optimistic concurrency, saves and re-reads the Transaction, and restores the complete snapshot when persistence or authored-part verification fails. Default form projections are allowed to follow Structure; user-authored forms are invariant. No structure action implicitly runs Specify, Generate, Build, Rebuild, compilation, reorganization, execution, or tests. Other actions cover indexes, attributes (set_attribute operates on global attribute definitions; use update_visual/move_attribute/remove_attribute for Transaction structure), levels, Domains (including enumValues), SubType Groups and subtype consistency (check_subtypes). For layout control trees use genexus_layout.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_structure",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "update_visual",
-            "dryRun": true,
-            "expectedVersion": "<versionToken>",
-            "module": "Operations",
-            "name": "OrderRecord",
-            "payload": {
-              "children": [
-                {
-                  "name": "OrderId"
-                },
-                {
-                  "name": "OrderAverageTime"
-                }
-              ]
-            }
-          },
-          {
-            "action": "move_attribute",
-            "after": "SampleReferenceId",
-            "attribute": "SampleSubtypeId",
-            "dryRun": true,
-            "level": "root",
-            "name": "SampleTransaction"
-          },
-          {
-            "action": "get_indexes",
-            "name": "Customer"
-          },
-          {
-            "action": "create_index",
-            "baseVersion": "<get_indexes versionToken>",
-            "dryRun": true,
-            "name": "Country",
-            "payload": {
-              "attributes": [
-                "CountryName"
-              ],
-              "name": "UCountryName",
-              "unique": true
-            },
-            "rollbackOnFailure": true
-          },
-          {
-            "action": "set_attribute",
-            "name": "CustomerBalance",
-            "payload": {
-              "formula": "sum(SampleTransactionAmount)"
-            }
-          },
-          {
-            "action": "set_level",
-            "name": "Customer",
-            "payload": {
-              "descriptionAttribute": "CustomerName"
-            }
-          },
-          {
-            "action": "update_group",
-            "name": "SampleSubtypeGroup",
-            "payload": {
-              "members": [
-                {
-                  "name": "SampleId",
-                  "subtypeOf": "BaseId"
-                }
-              ]
-            }
-          }
-        ],
         "properties": {
           "action": {
             "description": "Structure operation to execute.",
@@ -4593,24 +3871,24 @@
             "type": "string"
           },
           "after": {
-            "description": "move_attribute: place attribute after this attribute in the same level. Mutually exclusive with before/position.",
+            "description": "move_attribute: place attribute after…",
             "type": "string"
           },
           "attribute": {
-            "description": "move_attribute: existing attribute to reorder by native SDK identity.",
+            "description": "move_attribute: existing attribute to…",
             "type": "string"
           },
           "baseVersion": {
-            "description": "Optimistic-concurrency token for update_visual/move_attribute/create_index. Stale state returns VersionConflict before mutation.",
+            "description": "Optimistic-concurrency token for…",
             "type": "string"
           },
           "before": {
-            "description": "move_attribute: place attribute before this attribute in the same level. Mutually exclusive with after/position.",
+            "description": "move_attribute: place attribute before…",
             "type": "string"
           },
           "dryRun": {
             "default": false,
-            "description": "update_visual/move_attribute/create_index: validate and return the projected diff without changing any object, Attribute, hash, or version.",
+            "description": "update_visual/move_attribute/create_ind…",
             "type": "boolean"
           },
           "expectedVersion": {
@@ -4622,44 +3900,44 @@
             "type": "string"
           },
           "level": {
-            "description": "move_attribute: root (default) or an unambiguous subordinate level name.",
+            "description": "move_attribute: root (default) or an…",
             "type": "string"
           },
           "levelPath": {
-            "description": "move_attribute: nested level path, e.g. [\"Item\",\"Operation\"].",
+            "description": "move_attribute: nested level path, e.g.…",
             "items": {
               "type": "string"
             },
             "type": "array"
           },
           "module": {
-            "description": "update_visual/move_attribute optional: Transaction module.",
+            "description": "update_visual/move_attribute optional:…",
             "type": "string"
           },
           "name": {
-            "description": "Object name. update_visual/move_attribute: Transaction name; create_index/get_indexes: Transaction or Table name.",
+            "description": "Object name.…",
             "type": "string"
           },
           "payload": {
-            "description": "update_visual (Transaction):{children:[...]}; update_visual (SDT):{isCollection?,collectionItemName?,children:[{name,type?,length?,decimals?,basedOnDomain?,basedOnAttribute?,isCollection?,isLevel?,children?}]}. update_group:{members:[{name,subtypeOf}],remove?:[name]}. create_index:{attributes:[\"Attr\"],unique?:true,name?,order?:\"Ascending\"|\"Descending\"}. Other actions keep their existing typed payloads.",
+            "description": "update_visual…",
             "type": "object"
           },
           "position": {
-            "description": "move_attribute: zero-based final attribute position in the level. Mutually exclusive with before/after.",
+            "description": "move_attribute: zero-based final…",
             "minimum": 0,
             "type": "integer"
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "update_visual, move_attribute and create_index capture snapshots and verify rollback after any save or re-read divergence.",
+            "description": "update_visual, move_attribute and…",
             "type": "boolean"
           },
           "type": {
-            "description": "Optional object type disambiguator (e.g. 'Transaction', 'Table') when multiple objects share the same name.",
+            "description": "Optional object type disambiguator…",
             "type": "string"
           },
           "validationMode": {
-            "description": "Explicitly run the inline Specify pass after selected writes. Never runs unless requested.",
+            "description": "Explicitly run the inline Specify pass…",
             "enum": [
               "specify"
             ],
@@ -4681,20 +3959,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Observability umbrella. action: executions (recent invocations) | watch_event (ops mentioning an event) | friction_append|friction_tail (.gx/friction.jsonl) | learning_report (aggregate friction) | logs (worker_debug.log tail) | profile_analyze|profile_hotspots|profile_correlate (GeneXus profiler XML).",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_telemetry",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "executions"
-          },
-          {
-            "action": "friction_tail",
-            "n": 20
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Telemetry, profiling, or friction-log operation to perform.",
+            "description": "Telemetry, profiling, or friction-log…",
             "enum": [
               "executions",
               "watch_event",
@@ -4709,11 +3978,11 @@
             "type": "string"
           },
           "event": {
-            "description": "watch_event: event name to match in operation payload.",
+            "description": "watch_event: event name to match in…",
             "type": "string"
           },
           "filterCorrelation": {
-            "description": "logs: filter by correlation/operation ID.",
+            "description": "logs: filter by correlation/operation…",
             "type": "string"
           },
           "grep": {
@@ -4729,15 +3998,15 @@
             "type": "integer"
           },
           "message": {
-            "description": "friction_append: description of the friction encountered.",
+            "description": "friction_append: description of the…",
             "type": "string"
           },
           "n": {
-            "description": "friction_tail: number of recent lines to return.",
+            "description": "friction_tail: number of recent lines…",
             "type": "integer"
           },
           "path": {
-            "description": "profile_*: path to the GeneXus profiler XML file.",
+            "description": "profile_*: path to the GeneXus profiler…",
             "type": "string"
           },
           "severity": {
@@ -4751,27 +4020,27 @@
             "type": "string"
           },
           "since": {
-            "description": "learning_report/logs: ISO-8601 start time filter.",
+            "description": "learning_report/logs: ISO-8601 start…",
             "type": "string"
           },
           "tail": {
-            "description": "logs: number of tail lines from worker_debug.log.",
+            "description": "logs: number of tail lines from…",
             "type": "integer"
           },
           "target": {
-            "description": "executions/watch_event: object name to filter.",
+            "description": "executions/watch_event: object name to…",
             "type": "string"
           },
           "tool": {
-            "description": "friction_append: tool name that produced the friction entry.",
+            "description": "friction_append: tool name that…",
             "type": "string"
           },
           "top": {
-            "description": "profile_hotspots: top-N hottest procedures to return.",
+            "description": "profile_hotspots: top-N hottest…",
             "type": "integer"
           },
           "until": {
-            "description": "learning_report: ISO-8601 end time filter.",
+            "description": "learning_report: ISO-8601 end time…",
             "type": "string"
           }
         },
@@ -4789,13 +4058,8 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "Execute native GeneXus tests (GXtest).",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_test",
       "inputSchema": {
-        "examples": [
-          {
-            "name": "MyTestProc"
-          }
-        ],
         "properties": {
           "kb": {
             "description": "KB alias.",
@@ -4819,32 +4083,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Real XPZ export/import over the SDK's IKnowledgeManagerService — dependency-aware, IDE Export/Import parity (NOT the filesystem copy genexus_io/kb_import do). action=export (targets[]+outputFile; includeDependencies=true exports transitive closure) | inspect (explore an .xpz, read-only) | import (apply into KB; dryRun defaults true=preview via ExploreExport; dryRun=false requires confirm=true).",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_transfer",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "export",
-            "outputFile": "C:\\tmp\\cust.xpz",
-            "targets": [
-              "Customer"
-            ]
-          },
-          {
-            "action": "export",
-            "includeDependencies": true,
-            "outputFile": "C:\\tmp\\cust_full.xpz",
-            "targets": [
-              "Customer"
-            ]
-          },
-          {
-            "action": "inspect",
-            "file": "C:\\tmp\\cust.xpz"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "XPZ export, inspection, or import operation to perform.",
+            "description": "XPZ export, inspection, or import…",
             "enum": [
               "export",
               "inspect",
@@ -4857,7 +4100,7 @@
             "type": "boolean"
           },
           "dryRun": {
-            "description": "import: true (default) previews; false applies (needs confirm).",
+            "description": "import: true (default) previews; false…",
             "type": "boolean"
           },
           "file": {
@@ -4866,7 +4109,7 @@
           },
           "includeDependencies": {
             "default": false,
-            "description": "export: compute transitive dependency closure (Calls, Tables) and export all referenced objects.",
+            "description": "export: compute transitive dependency…",
             "type": "boolean"
           },
           "kb": {
@@ -4903,49 +4146,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Variables CRUD. add accepts varName or variables[] batch; modify changes type atomically. basedOn binds a Domain; basedOnAttribute (or typeName Attribute:<name>) binds an Attribute by native SDK identity preserving picture/semantics. objectType=BusinessComponent with objectName+module binds a modular BC by EntityKey/GUID and verifies it after save. length/decimals override size; collection=true declares a collection; untyped add inherits a same-named attribute with its binding. modify refuses to silently drop an Attribute binding (AttributeBindingWouldBeLost); reads surface basedOn. dryRun validates and previews without mutation; async returns an operationId.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_variable",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "add",
-            "name": "MyPanel",
-            "typeName": "Numeric",
-            "varName": "&Choice"
-          },
-          {
-            "action": "add",
-            "dryRun": true,
-            "module": "Operations",
-            "name": "MyProc",
-            "objectName": "OrderRecord",
-            "objectType": "BusinessComponent",
-            "varName": "&OrderRecord"
-          },
-          {
-            "action": "add",
-            "name": "MyProc",
-            "variables": [
-              {
-                "length": 80,
-                "typeName": "VarChar",
-                "varName": "&ApiKey"
-              },
-              {
-                "length": 9,
-                "typeName": "Numeric",
-                "varName": "&CmdNro"
-              }
-            ]
-          },
-          {
-            "action": "delete",
-            "name": "MyPanel",
-            "varName": "&OldVar"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Variable-part operation to add, delete, or modify a variable.",
+            "description": "Variable-part operation to add, delete,…",
             "enum": [
               "add",
               "delete",
@@ -4954,67 +4159,71 @@
             "type": "string"
           },
           "async": {
-            "description": "Run as a background job. Result returns operationId/job_id for genexus_lifecycle polling.",
+            "description": "Run as a background job. Result returns…",
             "type": "boolean"
           },
           "basedOn": {
-            "description": "Domain name, or Attribute:<name> for an attribute binding (prefer basedOnAttribute).",
+            "description": "Domain name, or Attribute:<name> for an…",
             "type": "string"
           },
           "basedOnAttribute": {
-            "description": "Attribute name (or Attribute:<name>) to bind; preserves picture/semantics.",
+            "description": "Attribute name (or Attribute:<name>) to…",
             "type": "string"
           },
           "collection": {
-            "description": "add/modify optional: declare the variable as a collection.",
+            "description": "add/modify optional: declare the…",
             "type": "boolean"
           },
           "dataType": {
-            "description": "modify alias for the replacement type; accepted alongside typeName.",
+            "description": "modify alias for the replacement type;…",
             "type": "string"
           },
           "decimals": {
-            "description": "add/modify optional: overrides decimals parsed from typeName.",
+            "description": "add/modify optional: overrides decimals…",
             "type": "integer"
           },
           "dryRun": {
             "default": false,
-            "description": "Validate and return the typed diff without changing any object, Attribute, hash, or version.",
+            "description": "Validate and return the typed diff…",
             "type": "boolean"
           },
           "estimated_seconds": {
-            "description": "When async=true, expected runtime used for progress/job metadata (default 30).",
+            "description": "When async=true, expected runtime used…",
             "type": "integer"
           },
           "expectedVersion": {
-            "description": "Optimistic-concurrency token for an object-backed add/modify. Stale state returns VersionConflict before mutation.",
+            "description": "Optimistic-concurrency token for an…",
             "type": "string"
+          },
+          "includePersistedText": {
+            "description": "Full text; default false.",
+            "type": "boolean"
           },
           "kb": {
             "description": "KB alias.",
             "type": "string"
           },
           "length": {
-            "description": "add/modify optional: overrides the length parsed from typeName.",
+            "description": "add/modify optional: overrides the…",
             "type": "integer"
           },
           "module": {
-            "description": "Module owning objectName. Required to disambiguate modular Business Components.",
+            "description": "Module owning objectName. Required to…",
             "type": "string"
           },
           "name": {
             "type": "string"
           },
           "newTypeName": {
-            "description": "modify alias for the replacement type; accepted alongside typeName.",
+            "description": "modify alias for the replacement type;…",
             "type": "string"
           },
           "objectName": {
-            "description": "Business Component Transaction name, without module when module is passed separately.",
+            "description": "Business Component Transaction name,…",
             "type": "string"
           },
           "objectType": {
-            "description": "add/modify: resolve an object-backed variable natively instead of interpreting typeName as a Domain.",
+            "description": "add/modify: resolve an object-backed…",
             "enum": [
               "BusinessComponent"
             ],
@@ -5022,26 +4231,26 @@
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "Object-backed variables always snapshot the complete owner and restore it on save/re-read divergence.",
+            "description": "Object-backed variables always snapshot…",
             "type": "boolean"
           },
           "typeName": {
-            "description": "Primitive (Character/Numeric/VarChar/Date/...), SDT/BC/Domain name, Attribute:<name>, or WebSession. VarChar keeps VARCHAR semantics.",
+            "description": "Primitive…",
             "type": "string"
           },
           "validationMode": {
-            "description": "Explicitly run the inline Specify pass after a legacy variable write. Never runs unless requested.",
+            "description": "Explicitly run the inline Specify pass…",
             "enum": [
               "specify"
             ],
             "type": "string"
           },
           "varName": {
-            "description": "Single-variable form (add/delete/modify). For batch add use variables[] instead.",
+            "description": "Single-variable form…",
             "type": "string"
           },
           "variables": {
-            "description": "Batch add only: one object per variable — {varName, typeName?, basedOn?, basedOnAttribute?, length?, decimals?, collection?}. Added before a single save.",
+            "description": "Batch add only: one object per variable…",
             "items": {
               "properties": {
                 "basedOn": {
@@ -5049,7 +4258,7 @@
                   "type": "string"
                 },
                 "basedOnAttribute": {
-                  "description": "Attribute name (or Attribute:<name>); preserves picture/semantics.",
+                  "description": "Attribute name (or Attribute:<name>);…",
                   "type": "string"
                 },
                 "collection": {
@@ -5091,22 +4300,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Versioning umbrella. action: history_list|history_get|history_save|history_restore (snapshot store; restore+discard=true is IDE 'Discard changes' parity) | undo (revert last N edits) | time_travel (recover bytes from a past git commit) | blame (git blame an object part) | diff (text: mode=textVsText|currentVsText) | diff_generated (against=last-build|git-head).",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_versioning",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "history_list",
-            "name": "Customer"
-          },
-          {
-            "action": "time_travel",
-            "at": "2026-05-20T10:00:00Z",
-            "name": "Customer"
-          }
-        ],
         "properties": {
           "action": {
-            "description": "History, diff, time-travel, or rollback operation to perform.",
+            "description": "History, diff, time-travel, or rollback…",
             "enum": [
               "history_list",
               "history_get",
@@ -5137,15 +4335,15 @@
             "type": "integer"
           },
           "discard": {
-            "description": "history_restore: true for IDE 'Discard changes' parity.",
+            "description": "history_restore: true for IDE 'Discard…",
             "type": "boolean"
           },
           "dryRun": {
-            "description": "history_restore/undo: preview without mutating the KB.",
+            "description": "history_restore/undo: preview without…",
             "type": "boolean"
           },
           "filePath": {
-            "description": "blame: absolute or KB-relative file path.",
+            "description": "blame: absolute or KB-relative file…",
             "type": "string"
           },
           "kb": {
@@ -5173,15 +4371,15 @@
             "type": "string"
           },
           "name": {
-            "description": "Object name for history, diff, time_travel, or blame.",
+            "description": "Object name for history, diff,…",
             "type": "string"
           },
           "part": {
-            "description": "Object part name, e.g. Source, Rules, Events.",
+            "description": "Object part name, e.g. Source, Rules,…",
             "type": "string"
           },
           "partName": {
-            "description": "Legacy alias for part on history actions.",
+            "description": "Legacy alias for part on history…",
             "type": "string"
           },
           "right": {
@@ -5189,11 +4387,11 @@
             "type": "string"
           },
           "snapshot": {
-            "description": "history_restore: snapshot label or path to restore.",
+            "description": "history_restore: snapshot label or path…",
             "type": "string"
           },
           "versionId": {
-            "description": "history_get/history_restore: numerical version ID.",
+            "description": "history_get/history_restore: numerical…",
             "type": "integer"
           }
         },
@@ -5211,18 +4409,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "KB context + version + health (worker/index/database) + next-step hints. Call FIRST every session. Lean by default; pass verbose=true ONCE for the inline playbooks + skills catalog of verified GeneXus reference resources (navigation, GAM, SD panel, WebPanel events). For a minimal connection+index health check use genexus_doctor.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_whoami",
       "inputSchema": {
         "additionalProperties": false,
-        "examples": [
-          {},
-          {
-            "verbose": true
-          }
-        ],
         "properties": {
           "verbose": {
-            "description": "Include the static playbooks + skills catalog + per-tool stats/heatmap. Default false (lean health payload).",
+            "description": "Include the static playbooks + skills…",
             "type": "boolean"
           }
         },
@@ -5237,17 +4429,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Gateway-only worker-pool warm-spare configuration. Does not require a KB selection or dispatch to the Worker.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_worker_pool",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "warm_spares",
-            "spareCount": 1
-          }
-        ],
         "properties": {
           "action": {
-            "description": "Worker-pool operation to warm spare workers.",
+            "description": "Worker-pool operation to warm spare…",
             "enum": [
               "warm_spares"
             ],
@@ -5271,20 +4457,11 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "Reload worker. mode=soft drains and respawns; mode=hard copies sourceDir during the drain window and respawns. force=true kills and respawns a wedged Worker, but cannot be combined with mode=hard; no Worker is stopped when that combination is rejected. See tool-help.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_worker_reload",
       "inputSchema": {
-        "examples": [
-          {
-            "mode": "soft"
-          },
-          {
-            "mode": "hard",
-            "sourceDir": "C:\\Projetos\\Genexus18MCP\\src\\GxMcp.Worker\\bin\\Debug"
-          }
-        ],
         "properties": {
           "alias": {
-            "description": "KB alias to reload when more than one worker is open.",
+            "description": "KB alias to reload when more than one…",
             "type": "string"
           },
           "drainTimeoutMs": {
@@ -5292,7 +4469,7 @@
             "type": "integer"
           },
           "force": {
-            "description": "Bypass drain; gateway kills + respawns. Use with mode=soft when the Worker is wedged; force=true + mode=hard is rejected before stopping anything.",
+            "description": "Bypass drain; gateway kills + respawns.…",
             "type": "boolean"
           },
           "kb": {
@@ -5322,82 +4499,11 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Typed WorkWithPlus action, form-level action, tab, grid, native table-type, and structural edits with dryRun, optimistic concurrency, exact snapshots, post-save reread, projection verification, and rollback. set_table_type mutates only an existing table type through the native PatternInstance SDK and preserves children, bindings, events, names, classes, defaultType, and childrenOrderedList. No lifecycle operation is implicit. Settings: embedded and separate WWP templates, paged reads and exact table-class dryRun; saves remain blocked.",
+      "description": "Full guidance: genexus://kb/tool-help/genexus_wwp",
       "inputSchema": {
-        "examples": [
-          {
-            "action": "list",
-            "name": "SampleOrderWW"
-          },
-          {
-            "action": "add_action",
-            "actionName": "Retry",
-            "dryRun": true,
-            "group": "Operations",
-            "name": "SampleOrderWW",
-            "procedure": "RetrySampleOrder",
-            "selection": "multiple"
-          },
-          {
-            "action": "add_tab",
-            "children": [
-              {
-                "basicType": "VarChar",
-                "length": 40,
-                "name": "Status",
-                "type": "variable"
-              },
-              {
-                "caption": "Refresh",
-                "name": "Refresh",
-                "type": "userAction"
-              }
-            ],
-            "controlName": "Details",
-            "dryRun": true,
-            "name": "SamplePanel",
-            "title": "Details"
-          },
-          {
-            "action": "add_grid_attribute",
-            "attribute": "SampleOrderStatus",
-            "caption": "Status",
-            "dryRun": true,
-            "name": "SampleOrderWW"
-          },
-          {
-            "action": "replace_web_component_with_user_action",
-            "caption": "&Context.EmpresaDescricao",
-            "controlType": "DropDownComponent",
-            "dryRun": true,
-            "gxobject": "WWP_MasterPageEmpresaSelectorWC",
-            "name": "WorkWithPlusWorkWithPlusMasterPage",
-            "sourceName": "EmpresaSelector",
-            "tablePath": "TableHeader > TableUserRole > EmpresaSelector",
-            "trigger": "Click",
-            "userActionName": "EmpresaSelector",
-            "webComponentLoad": "On every click"
-          },
-          {
-            "action": "set_table_type",
-            "dryRun": true,
-            "name": "SamplePanel",
-            "tablePath": "TableMain > TableContent > TableLogin",
-            "tableType": "Responsive"
-          },
-          {
-            "action": "add_user_action",
-            "actionName": "BaixarConfiguracao",
-            "caption": "Baixar Configuração",
-            "containerName": "TableActions",
-            "dryRun": true,
-            "name": "WorkWithPlusImpressaoConfiguracao",
-            "rollbackOnFailure": true
-          }
-        ],
         "properties": {
           "action": {
-            "description": "WorkWithPlus action-group, tab, grid-attribute, or explicit native structural operation to perform.",
+            "description": "WorkWithPlus action-group, tab,…",
             "enum": [
               "list",
               "add_action",
@@ -5418,15 +4524,15 @@
             "type": "string"
           },
           "actionName": {
-            "description": "Action name. add_user_action derives the GeneXus event Do<actionName>.",
+            "description": "Action name. add_user_action derives…",
             "type": "string"
           },
           "attribute": {
-            "description": "add_grid_attribute: GeneXus Attribute name.",
+            "description": "add_grid_attribute: GeneXus Attribute…",
             "type": "string"
           },
           "baseVersion": {
-            "description": "Optimistic-concurrency token returned by dryRun/read.",
+            "description": "Optimistic-concurrency token returned…",
             "type": "string"
           },
           "buttonClass": {
@@ -5434,11 +4540,11 @@
             "type": "string"
           },
           "caption": {
-            "description": "Action caption. For a DropDownComponent pass the GeneXus expression used for the closed button, for example &Context.EmpresaDescricao.",
+            "description": "Action caption. For a DropDownComponent…",
             "type": "string"
           },
           "children": {
-            "description": "add_tab controls; flat children are wrapped in a responsive table. Nested table children accept the same control shape.",
+            "description": "add_tab controls; flat children are…",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -5504,11 +4610,11 @@
             "type": "array"
           },
           "confirm": {
-            "description": "Confirmation prompt; required to delete unless dryRun.",
+            "description": "Confirmation prompt; required to delete…",
             "type": "boolean"
           },
           "containerName": {
-            "description": "add_user_action: form-level action container, usually TableActions.",
+            "description": "add_user_action: form-level action…",
             "type": "string"
           },
           "controlName": {
@@ -5516,7 +4622,7 @@
             "type": "string"
           },
           "controlType": {
-            "description": "replace_web_component_with_user_action: resulting UserAction ControlType.",
+            "description": "replace_web_component_with_user_action:…",
             "enum": [
               "DropDownComponent"
             ],
@@ -5527,11 +4633,11 @@
             "type": "string"
           },
           "dryRun": {
-            "description": "Return a typed diff and versionToken without mutation.",
+            "description": "Return a typed diff and versionToken…",
             "type": "boolean"
           },
           "enabledWhen": {
-            "description": "Availability condition stored verbatim; expression semantics are not validated.",
+            "description": "Availability condition stored verbatim;…",
             "type": "string"
           },
           "entityKey": {
@@ -5542,19 +4648,19 @@
             "type": "string"
           },
           "fromGroup": {
-            "description": "move_action: source group (optional; searched across groups when omitted).",
+            "description": "move_action: source group (optional;…",
             "type": "string"
           },
           "group": {
-            "description": "Action group name. add_action creates it when absent; update/remove use it as a filter.",
+            "description": "Action group name. add_action creates…",
             "type": "string"
           },
           "guid": {
-            "description": "Pattern Settings object GUID for settings_* actions.",
+            "description": "Pattern Settings object GUID for…",
             "type": "string"
           },
           "gxobject": {
-            "description": "replace_web_component_with_user_action: existing WebComponent Gxobject to retain; it must match the current node.",
+            "description": "replace_web_component_with_user_action:…",
             "type": "string"
           },
           "icon": {
@@ -5566,16 +4672,16 @@
             "type": "string"
           },
           "limit": {
-            "description": "Settings nodes per page; offset=0, limit=0 includes full separate-template XML.",
+            "description": "Settings nodes per page; offset=0,…",
             "minimum": 0,
             "type": "integer"
           },
           "name": {
-            "description": "Transaction, WebPanel, or WorkWithPlus<Object> host.",
+            "description": "Transaction, WebPanel, or…",
             "type": "string"
           },
           "nodePath": {
-            "description": "Settings node path returned by settings_read.",
+            "description": "Settings node path returned by…",
             "type": "string"
           },
           "offset": {
@@ -5588,7 +4694,7 @@
             "type": "integer"
           },
           "procedure": {
-            "description": "add/update: associated Procedure; existence is validated against the KB.",
+            "description": "add/update: associated Procedure;…",
             "type": "string"
           },
           "property": {
@@ -5597,11 +4703,11 @@
           },
           "rollbackOnFailure": {
             "default": true,
-            "description": "On a failed write or post-save verification, restore the original PatternInstance when possible.",
+            "description": "On a failed write or post-save…",
             "type": "boolean"
           },
           "selection": {
-            "description": "add/update: execution scope for grid actions.",
+            "description": "add/update: execution scope for grid…",
             "enum": [
               "single",
               "multiple"
@@ -5609,15 +4715,15 @@
             "type": "string"
           },
           "sourceName": {
-            "description": "replace_web_component_with_user_action: existing WebComponent name.",
+            "description": "replace_web_component_with_user_action:…",
             "type": "string"
           },
           "tablePath": {
-            "description": "set_table_type: existing table breadcrumb by names or indexed table segments; replace_web_component_with_user_action: full breadcrumb including the source node, for example TableHeader > TableUserRole > EmpresaSelector.",
+            "description": "set_table_type: existing table…",
             "type": "string"
           },
           "tableType": {
-            "description": "set_table_type: requested native WWP table type. Only the existing table @type changes; defaultType and all child identity/metadata remain guarded.",
+            "description": "set_table_type: requested native WWP…",
             "enum": [
               "Regular",
               "Responsive"
@@ -5625,7 +4731,7 @@
             "type": "string"
           },
           "template": {
-            "description": "Settings catalog path, wwp:<template-guid>, or unique template name.",
+            "description": "Settings catalog path,…",
             "type": "string"
           },
           "title": {
@@ -5633,7 +4739,7 @@
             "type": "string"
           },
           "toGroup": {
-            "description": "move_action: destination group (created when absent).",
+            "description": "move_action: destination group (created…",
             "type": "string"
           },
           "trigger": {
@@ -5645,14 +4751,14 @@
             "type": "string"
           },
           "userActionName": {
-            "description": "replace_web_component_with_user_action: resulting UserAction name; defaults to sourceName.",
+            "description": "replace_web_component_with_user_action:…",
             "type": "string"
           },
           "value": {
             "type": "string"
           },
           "versionToken": {
-            "description": "Backward-compatible alias for baseVersion.",
+            "description": "Backward-compatible alias for…",
             "type": "string"
           },
           "webComponentLoad": {

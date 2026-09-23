@@ -299,7 +299,7 @@ namespace GxMcp.Worker.Services
             _objectService = objectService;
             _buildService = buildService;
             _runner = runner ?? new DefaultCliRunner();
-            _configPath = ResolvePathValue(configPath ?? DefaultConfigPath(), AppDomain.CurrentDomain.BaseDirectory);
+            _configPath = ResolvePathValue(configPath ?? DefaultConfigPath(), RuntimePaths.StateRoot);
             _baselineRootOverride = baselineRootOverride;
             // Default resolver — best-effort lookup via KbService. Falls back to
             // null when ObjectService isn't wired (unit tests), in which case
@@ -362,17 +362,7 @@ namespace GxMcp.Worker.Services
 
         private static string DefaultConfigPath()
         {
-            // publish/worker/preview.config.json relative to the worker exe; falls back
-            // to %CD%/publish/worker/... for dev runs.
-            try
-            {
-                var baseDir = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-                return Path.Combine(baseDir, "preview.config.json");
-            }
-            catch
-            {
-                return "preview.config.json";
-            }
+            return Path.Combine(RuntimePaths.StateRoot, "preview.config.json");
         }
 
         public static JObject DefaultConfig()
@@ -390,7 +380,7 @@ namespace GxMcp.Worker.Services
                 },
                 ["objectParms"] = new JObject(),
                 ["axiCli"] = null,
-                ["baselineDir"] = "publish/worker/preview-baselines"
+                ["baselineDir"] = "preview-baselines"
             };
         }
 
@@ -435,7 +425,7 @@ namespace GxMcp.Worker.Services
             if (_cachedCliResolution != null) return _cachedCliResolution;
 
             var cfg = LoadConfig();
-            string workerDir = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
+            string workerDir = GxMcp.Worker.Helpers.RuntimePaths.InstallDirectory;
             string profilePath = ResolvePathValue(
                 Environment.GetEnvironmentVariable("GXMCP_PROFILE_CONFIG_PATH"), workerDir);
             JObject profile = TryLoadJson(profilePath);
@@ -655,7 +645,7 @@ namespace GxMcp.Worker.Services
                 if (!Path.IsPathRooted(value))
                 {
                     string root = CleanPath(baseDir);
-                    if (string.IsNullOrWhiteSpace(root)) root = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
+                    if (string.IsNullOrWhiteSpace(root)) root = GxMcp.Worker.Helpers.RuntimePaths.InstallDirectory;
                     value = Path.Combine(root, value);
                 }
                 return Path.GetFullPath(value);
@@ -665,7 +655,7 @@ namespace GxMcp.Worker.Services
 
         private static string NormalizeDirectory(string directory)
         {
-            string value = ResolvePathValue(directory, AppDomain.CurrentDomain.BaseDirectory);
+            string value = ResolvePathValue(directory, GxMcp.Worker.Helpers.RuntimePaths.InstallDirectory);
             return value?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
@@ -1163,17 +1153,11 @@ namespace GxMcp.Worker.Services
         {
             if (!string.IsNullOrEmpty(_baselineRootOverride)) return Path.GetFullPath(_baselineRootOverride);
             string fromCfg = cfg?["baselineDir"]?.ToString();
-            if (string.IsNullOrEmpty(fromCfg)) fromCfg = "publish/worker/preview-baselines";
+            if (string.IsNullOrEmpty(fromCfg)) fromCfg = "preview-baselines";
             if (Path.IsPathRooted(fromCfg)) return Path.GetFullPath(fromCfg);
-            try
-            {
-                var baseDir = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-                return Path.GetFullPath(Path.Combine(baseDir, "preview-baselines"));
-            }
-            catch
-            {
-                return Path.GetFullPath(fromCfg);
-            }
+            if (string.Equals(fromCfg, "publish/worker/preview-baselines", StringComparison.OrdinalIgnoreCase))
+                fromCfg = "preview-baselines";
+            return Path.GetFullPath(Path.Combine(RuntimePaths.StateRoot, fromCfg));
         }
 
         internal static bool IsValidPreviewName(string name)

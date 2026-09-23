@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -88,6 +90,35 @@ namespace GxMcp.Gateway.Tests
             Assert.False(McpRouter.TryRewriteLegacyTool("genexus_query", new JObject(), out var newName, out _),
                 "Tools that did not consolidate must not be rewritten.");
             Assert.Equal("genexus_query", newName);
+        }
+
+        [Fact]
+        public void SoftAliasesRemainCallableButAreNotAdvertised()
+        {
+            string[] aliases =
+            {
+                "genexus_smoke_test", "genexus_a11y_audit", "genexus_wcag_check", "genexus_browser_capture",
+                "genexus_cross_browser", "genexus_preview", "genexus_db_drift", "genexus_db_optimize",
+                "genexus_sql", "genexus_generate_sample_data", "genexus_types", "genexus_translations",
+                "genexus_history", "genexus_undo", "genexus_time_travel", "genexus_blame", "genexus_diff",
+                "genexus_diff_generated", "genexus_asset", "genexus_export_object", "genexus_import_object",
+                "genexus_export_unified", "genexus_screenshot_publish", "genexus_ocr_screenshot",
+                "genexus_add_variable", "genexus_delete_variable", "genexus_modify_variable",
+                "genexus_execution_history", "genexus_watch_event", "genexus_friction_log", "genexus_learning",
+                "genexus_logs", "genexus_profile", "genexus_create_object", "genexus_create_popup",
+                "genexus_sd_panel", "genexus_save_as", "genexus_forge", "genexus_apply_template"
+            };
+            var definitions = JArray.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "tool_definitions.json")));
+            var advertisedNames = definitions.OfType<JObject>()
+                .Select(tool => tool["name"]?.ToString() ?? string.Empty)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string alias in aliases)
+            {
+                Assert.DoesNotContain(alias, advertisedNames);
+                Assert.True(McpRouter.TryRewriteLegacyTool(alias, null, out _, out _),
+                    $"Soft alias '{alias}' must remain callable.");
+            }
         }
 
         [Fact]

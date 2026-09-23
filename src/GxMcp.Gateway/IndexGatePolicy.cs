@@ -41,6 +41,7 @@ namespace GxMcp.Gateway
         private static bool IsIndexDependentTool(string? toolName, JObject? args = null)
         {
             if (string.IsNullOrWhiteSpace(toolName)) return false;
+            if (IsIdentityBoundReadAvailableDuringIndexing(toolName, args)) return false;
             if (IndexDependentToolSet.Contains(toolName)) return true;
 
             string? action = args?["action"]?.ToString();
@@ -55,6 +56,79 @@ namespace GxMcp.Gateway
 
             return string.Equals(toolName, "genexus_versioning", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(action, "diff_generated", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static bool IsIdentityBoundReadAvailableDuringIndexingForTest(
+            string? toolName, JObject? args = null)
+            => IsIdentityBoundReadAvailableDuringIndexing(toolName, args);
+
+        private static bool IsIdentityBoundReadAvailableDuringIndexing(string? toolName, JObject? args)
+        {
+            if (args == null || string.IsNullOrWhiteSpace(toolName)) return false;
+
+            bool hasObjectIdentity = HasNonEmptyArgument(args, "guid")
+                || HasNonEmptyArgument(args, "entityKey")
+                || HasNonEmptyArgument(args, "path")
+                || HasNonEmptyArgument(args, "name");
+
+            if (string.Equals(toolName, "genexus_read", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(toolName, "genexus_inspect", StringComparison.OrdinalIgnoreCase))
+                return hasObjectIdentity;
+
+            if (string.Equals(toolName, "genexus_navigation", StringComparison.OrdinalIgnoreCase))
+                return string.Equals(args["action"]?.ToString(), "view", StringComparison.OrdinalIgnoreCase)
+                    && HasNonEmptyArgument(args, "name");
+
+            if (string.Equals(toolName, "genexus_search_source", StringComparison.OrdinalIgnoreCase))
+                return HasNonEmptyArgument(args, "objectName");
+
+            return false;
+        }
+
+        private static bool HasNonEmptyArgument(JObject args, string name)
+            => !string.IsNullOrWhiteSpace(args[name]?.ToString());
+
+        internal static JObject? BuildExactReadIndexMetadataForTest(
+            string? status, string? freshness, int? etaMs)
+            => BuildExactReadIndexMetadata(new IndexStateSnapshot
+            {
+                Status = string.IsNullOrWhiteSpace(status) ? "Cold" : status,
+                Freshness = freshness,
+                EtaMs = etaMs
+            });
+
+        private static JObject? BuildExactReadIndexMetadata(IndexStateSnapshot snapshot)
+        {
+            if (IsIndexUsableForReads(snapshot)) return null;
+            string freshness = string.IsNullOrWhiteSpace(snapshot.Freshness)
+                ? InferIndexFreshness(snapshot.Status)
+                : snapshot.Freshness!;
+            return new JObject
+            {
+                ["status"] = snapshot.Status,
+                ["freshness"] = freshness,
+                ["etaMs"] = snapshot.EtaMs.HasValue
+                    ? (JToken)snapshot.EtaMs.Value
+                    : JValue.CreateNull()
+            };
+        }
+
+        private static void AttachExactReadIndexMetadata(JObject toolResult, string? toolName, JObject? args)
+        {
+            if (!IsIdentityBoundReadAvailableDuringIndexing(toolName, args)) return;
+            IndexStateSnapshot snapshot = GetLastKnownIndexState(_currentKb.Value?.NormalizedAlias);
+            JObject? indexMetadata = BuildExactReadIndexMetadata(snapshot);
+            JObject metadata = toolResult["_meta"] as JObject ?? new JObject();
+            if (indexMetadata == null)
+            {
+                metadata.Remove("index");
+            }
+            else
+            {
+                metadata["index"] = indexMetadata;
+            }
+            if (metadata.HasValues) toolResult["_meta"] = metadata;
+            else toolResult.Remove("_meta");
         }
 
         // Issue #209 (policy A): the gate stays fail-closed, but its envelope must be
@@ -98,6 +172,7 @@ namespace GxMcp.Gateway
                 // caller into a wait that can only time out. Mirrors whoami's indexSuggestion.
                 ["hint"] = "Wait instead of polling: genexus_lifecycle action=status wait=30 freshness=current, "
                     + "then re-issue this tool. genexus_whoami observes progress but does not block."
+                    + " Exact reads by name, type, GUID, EntityKey, or path remain available during indexing; index-derived extras may be partial."
                     + (idleStale
                         ? " No index refresh is active. If the state persists, start a warm refresh with genexus_lifecycle action=index force=false."
                         : isRecoverable

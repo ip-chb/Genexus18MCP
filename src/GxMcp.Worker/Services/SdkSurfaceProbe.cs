@@ -253,11 +253,14 @@ namespace GxMcp.Worker.Services
             if (!string.IsNullOrEmpty(envRepo) && Directory.Exists(envRepo))
                 return Path.Combine(envRepo, "docs", "sdk-probe");
 
-            // Walk up from current dir to find a `docs/sdk-probe` location candidate.
+            // Source checkouts keep the probe under docs; installed npm packages
+            // must never receive generated diagnostics in their replaceable tree.
+            string installDirectory = GxMcp.Worker.Helpers.RuntimePaths.InstallDirectory;
+            bool underNodeModules = installDirectory.Replace('/', '\\')
+                .IndexOf("\\node_modules\\", StringComparison.OrdinalIgnoreCase) >= 0;
             try
             {
-                var cwd = AppDomain.CurrentDomain.BaseDirectory;
-                var dir = new DirectoryInfo(cwd);
+                var dir = underNodeModules ? null : new DirectoryInfo(installDirectory);
                 for (int i = 0; i < 6 && dir != null; i++)
                 {
                     var probe = Path.Combine(dir.FullName, "docs");
@@ -268,7 +271,7 @@ namespace GxMcp.Worker.Services
             }
             catch { }
 
-            return Path.Combine(Path.GetTempPath(), "gxmcp_sdk_probe");
+            return Path.Combine(GxMcp.Worker.Helpers.RuntimePaths.TempRoot, "sdk-probe");
         }
 
         private static string BuildIndexMarkdown(JArray asmArr, List<string> warnings, int generatorCandidates)

@@ -4705,17 +4705,24 @@ namespace GxMcp.Worker.Services
 
                 if (part == null)
                 {
+                    result["code"] = "PartNotFound";
                     result["error"] = $"Part '{partName}' not found in {obj.Name}";
+                    result["objectName"] = obj.Name;
+                    result["objectType"] = obj.TypeDescriptor?.Name;
                     try
                     {
                         var avail = GxMcp.Worker.Structure.PartAccessor.GetAvailableParts(obj);
                         if (avail != null && avail.Length > 0)
                         {
                             result["availableParts"] = new JArray(avail);
-                            result["hint"] = $"Valid parts for {obj.TypeDescriptor?.Name ?? "object"}: {string.Join(", ", avail)}.";
                         }
                     }
                     catch { }
+                    string typeName = obj.TypeDescriptor?.Name ?? "object";
+                    string available = result["availableParts"] is JArray parts && parts.Count > 0
+                        ? $" Valid parts for {typeName}: {string.Join(", ", parts.Values<string>())}."
+                        : string.Empty;
+                    result["hint"] = available + " For parameters or signatures, use genexus_inspect include=[\"signature\"].";
                     return result.ToString();
                 }
 

@@ -1540,6 +1540,12 @@ namespace GxMcp.Gateway
                     ["serverVersion"] = McpRouter.ServerVersion,
                     ["protocolVersion"] = McpRouter.SupportedProtocolVersion
                 },
+                ["toolProfile"] = new JObject
+                {
+                    ["active"] = ToolProfileFilter.ResolveActiveProfile(cfg?.Server?.ToolProfile),
+                    ["availableProfiles"] = new JArray("standard", "core", "authoring", "devops", "ui", "db", "all"),
+                    ["hint"] = "Set Server.ToolProfile or GXMCP_PROFILE to choose a profile; combine profiles with '+'. Use 'all' to expose every tool."
+                },
                 ["worker"] = BuildWorkerBlock(),
                 // Self-update awareness — LLM-visible structured data sourced from the
                 // 24h-cached UpdateNotifier result. Lets the agent check whoami.update.

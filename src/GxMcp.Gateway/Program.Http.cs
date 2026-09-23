@@ -431,7 +431,7 @@ namespace GxMcp.Gateway
 
                 try
                 {
-                    var requestObj = JsonConvert.DeserializeObject<JObject>(body);
+                    var requestObj = GxMcp.Common.JsonIngress.ParseObject(body);
                     if (requestObj == null) return Results.Json(new { jsonrpc = "2.0", id = (string?)null, error = new { code = -32700, message = "Invalid JSON" } }, statusCode: 400);
 
                     id = requestObj["id"]?.ToString() ?? "no-id";

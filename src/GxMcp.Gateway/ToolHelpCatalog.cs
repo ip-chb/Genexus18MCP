@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace GxMcp.Gateway
 {
@@ -110,7 +112,7 @@ namespace GxMcp.Gateway
                 "- `verbose: true` adds slices with ±15 lines of context.\n" +
                 "- `return_post_state: false` opts out of the post-state block to save tokens.\n" +
                 "- `async: true` returns immediately with one `operationId` / `job_id`; the same ID is used by Worker busy telemetry and lifecycle status/result/cancel. Cancellation terminalizes the operation and recycles a blocked non-preemptible Worker.\n" +
-                "- Full Source writes return the independently re-read `source`, `postSaveVerification.versionToken`, `persisted`, and `implicitLifecycleActions`. After a timeout or cancellation, another write to that object is blocked until `genexus_read` confirms its actual state.\n\n" +
+                "- Successful writes omit full persisted `source`/`content` by default; `return_post_state` only controls `post_state`. Pass `includePersistedText: true` to restore full text. Otherwise use `genexus_read` when the complete part is needed. Oversized `post_state.diff` is capped at 40 lines with `diffTruncated: true`. Full Source receipts retain `postSaveVerification.versionToken`, `persisted`, and `implicitLifecycleActions`; after timeout/cancellation, a fresh `genexus_read` still gates another write.\n\n" +
                 "## Patch persistence verification\n" +
                 "Full Source and Rules use the same public-read representation after save. Full Source supports requireObjectSave. sdkSaveCompleted/saved describe physical save independently of persistedStateKnown and postSaveVerification.matches; inspect mutation.diff for bounded expected/read lines and lineEndings, moduleQualification or contentMismatch. Never retry automatically. For `part=Events`, `requireObjectSave: true` requests the complete-save contract. Dry runs remain available; real writes currently return `ObjectSaveIsolationUnverified` before persistence because SDK/pattern save-event isolation is unverified. There is no override. This mode requires `baseVersion` for a non-dry-run write. If only part of that contract is confirmed, the response is `ObjectSaveIncomplete`, includes `partPersisted`, `objectSaved`, `metadataStampPersisted`, `metadataUpdated`, `revisionBefore`, `revisionAfter`, and sibling-part evidence, and warns against a blind retry; rollback is never implicit. `verifyMode: 'normalized'` is the default and tolerates EOL, encoding marker, trailing-whitespace, and repeated-blank-line rendering by the SDK; full `exact` compares text verbatim including EOL; patch `exact` retains logical CRLF/LF equivalence; `semantic` also tolerates harmless SDK casing/spacing changes. Comment-only Replace writes require `baseVersion`, are verified against the requested comment, report active old-statement presence, and return `CommentOnlyWriteNotPersisted` if the SDK re-read diverges. A mismatch is never reported as Applied. Rollback requires `rollbackOnFailure: true` and a valid snapshot. Full Source returns `AtomicRollbackUnavailable` without a restore write until atomic conditional restore is supported; it never overwrites a newer edit through best-effort rollback. Pass the prior read's `versionToken` as `baseVersion` to reject concurrent edits. No Specify, Generate, Build, Rebuild, compilation, reorganization, execution, or tests are invoked by a patch write.\n\n" +
                 "## Disambiguation\n" +
@@ -515,7 +517,7 @@ namespace GxMcp.Gateway
                 "# genexus_properties\n\n" +
                 "Read or change object-level GeneXus properties without editing the object source.\n\n" +
                 "## Actions\n" +
-                "- `get` — read current property values and version information. Filter with `propertyName` (name, comma-separated list, or * wildcard), `propertyNames[]`, `query` (search filter), or `projection` (minimal, standard, full; default full). Responses carry a flat `values` key-value map and `didYouMean` suggestions on miss.\n" +
+                "- `get` — read current property values and version information. Filter with `propertyName` (name, comma-separated list, or * wildcard), `propertyNames[]`, `query` (search filter), or `projection` (minimal, standard, full; default full). `targets: [{name, type?}]` reads up to 100 objects in input order; each result has its own status/error.\n" +
                 "- `set` — assign one or more named properties and verify the saved values.\n" +
                 "- `move` — move an object to another module or folder.\n\n" +
                 "`get` is read-only. `set` and `move` mutate the KB; use the version token when a concurrent IDE edit must not be overwritten.\n",
@@ -677,13 +679,35 @@ namespace GxMcp.Gateway
         internal static string? Get(string toolName)
         {
             if (string.IsNullOrWhiteSpace(toolName)) return null;
+            return Get(toolName, McpRouter.FindToolDefinitionForHelp(toolName));
+        }
+
+        internal static string? Get(string toolName, JObject? definition)
+        {
+            if (string.IsNullOrWhiteSpace(toolName)) return null;
+
+            string canonical = toolName;
+            string? curated = null;
             if (_helpTexts.TryGetValue(toolName, out var text))
-                return text + ContextLeaseContract + OperationClassifier.BuildHelpContract(toolName);
-            // Legacy alias → canonical: resolve and retry so old tool names still find help.
-            if (McpRouter.TryRewriteLegacyTool(toolName, null, out var canonical, out _)
-                && _helpTexts.TryGetValue(canonical, out var canonText))
-                return canonText + ContextLeaseContract + OperationClassifier.BuildHelpContract(canonical);
-            return null;
+            {
+                curated = text + ContextLeaseContract + OperationClassifier.BuildHelpContract(toolName);
+            }
+            else if (McpRouter.TryRewriteLegacyTool(toolName, null, out var rewritten, out _)
+                && _helpTexts.TryGetValue(rewritten, out var canonicalText))
+            {
+                canonical = rewritten;
+                curated = canonicalText + ContextLeaseContract + OperationClassifier.BuildHelpContract(canonical);
+            }
+
+            if (definition == null) return curated;
+
+            string description = definition["description"]?.ToString() ?? string.Empty;
+            string schema = definition["inputSchema"]?.ToString(Formatting.Indented) ?? "{}";
+            string heading = curated ?? $"# {canonical}\n";
+            return heading
+                + "\n\n## Complete tool definition\n\n"
+                + "### Description\n\n" + description + "\n\n"
+                + "### Input schema\n\n```json\n" + schema + "\n```\n";
         }
 
         internal static System.Collections.Generic.IReadOnlyCollection<string> KnownTools => _helpTexts.Keys;

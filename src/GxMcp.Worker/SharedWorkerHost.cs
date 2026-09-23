@@ -20,6 +20,16 @@ namespace GxMcp.Worker
     /// </summary>
     internal static class SharedWorkerHost
     {
+        internal static StreamWriter CreateChildStdinWriter(Stream stream)
+        {
+            if (stream == null) throw new ArgumentNullException(nameof(stream));
+            return new StreamWriter(stream, new UTF8Encoding(false), 64 * 1024)
+            {
+                AutoFlush = false,
+                NewLine = "\n"
+            };
+        }
+
         internal static bool IsRequested(string[] args)
         {
             if (args == null) return false;
@@ -128,6 +138,7 @@ namespace GxMcp.Worker
         private readonly object _childGate = new object();
         private readonly Queue<DateTime> _respawnHistory = new Queue<DateTime>();
         private Process _child;
+        private StreamWriter _childStdin;
         private Thread _childWriter;
         private Thread _childReader;
         private Thread _childErrorReader;
@@ -201,6 +212,8 @@ namespace GxMcp.Worker
             var child = new Process { StartInfo = start, EnableRaisingEvents = true };
             if (!child.Start()) throw new InvalidOperationException("Could not start shared Worker child.");
             _child = child;
+            var childStdin = SharedWorkerHost.CreateChildStdinWriter(child.StandardInput.BaseStream);
+            _childStdin = childStdin;
             _record = new SharedWorkerHostRegistryRecord
             {
                 Identity = new SharedWorkerHostIdentity
@@ -223,7 +236,7 @@ namespace GxMcp.Worker
             };
             WriteRecord();
 
-            _childWriter = new Thread(() => ChildWriterLoop(child)) { IsBackground = true, Name = "SharedWorkerChildWriter" };
+            _childWriter = new Thread(() => ChildWriterLoop(childStdin)) { IsBackground = true, Name = "SharedWorkerChildWriter" };
             _childReader = new Thread(() => ChildReaderLoop(child)) { IsBackground = true, Name = "SharedWorkerChildReader" };
             _childErrorReader = new Thread(() => ChildErrorReaderLoop(child)) { IsBackground = true, Name = "SharedWorkerChildErrorReader" };
             _childWriter.Start();
@@ -333,7 +346,7 @@ namespace GxMcp.Worker
             }
 
             JObject request;
-            try { request = JObject.Parse(line); }
+            try { request = GxMcp.Common.JsonIngress.ParseObject(line); }
             catch { SendHostError(attachment, "malformed JSON-RPC frame"); return; }
             if (!string.Equals(request.Value<string>("jsonrpc"), "2.0", StringComparison.Ordinal))
             {
@@ -395,6 +408,8 @@ namespace GxMcp.Worker
                 string failureDiagnostic = BuildChildFailureDiagnostic(_child);
                 _lastChildFailureDiagnostic = failureDiagnostic;
                 FailRoutesForRespawn();
+                try { _childStdin?.Dispose(); } catch { }
+                _childStdin = null;
                 try { _child?.Dispose(); } catch { }
                 _sdkReady = false;
                 _generation++;
@@ -464,7 +479,7 @@ namespace GxMcp.Worker
                 attachment.ClearChildQueue();
         }
 
-        private void ChildWriterLoop(Process child)
+        private void ChildWriterLoop(StreamWriter childStdin)
         {
             try
             {
@@ -476,8 +491,8 @@ namespace GxMcp.Worker
                         if (!attachment.TryDequeueChild(out string line)) continue;
                         wrote = true;
                         if (_stop.IsCancellationRequested) break;
-                        child.StandardInput.WriteLine(line);
-                        child.StandardInput.Flush();
+                        childStdin.WriteLine(line);
+                        childStdin.Flush();
                     }
                     if (wrote) continue;
                     Thread.Sleep(5);
@@ -500,7 +515,7 @@ namespace GxMcp.Worker
                         break;
                     }
                     JObject frame;
-                    try { frame = JObject.Parse(line); }
+                    try { frame = GxMcp.Common.JsonIngress.ParseObject(line); }
                     catch
                     {
                         // The normal Worker emits two plain-text handshake lines before
@@ -636,7 +651,7 @@ namespace GxMcp.Worker
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
             _stop.Cancel();
             foreach (var attachment in _attachments.Values) attachment.Stop();
-            try { _child?.StandardInput.Close(); } catch { }
+            try { _childStdin?.Close(); } catch { }
             try
             {
                 if (_child != null && !_child.HasExited)

@@ -385,10 +385,21 @@ namespace GxMcp.Worker.Structure
                 catch { }
             }
 
+            // Expose virtual/aliased parts only when the same resolver used by
+            // genexus_read can actually resolve them on this object.
+            foreach (string alias in new[] { "Rules", "Events" })
+            {
+                try
+                {
+                    if (GetPart(obj, alias) != null && !names.Contains(alias, StringComparer.OrdinalIgnoreCase))
+                        names.Add(alias);
+                }
+                catch { }
+            }
+
             // "Source" and "Events" both resolve to the same ISource part on WebPanels/Transactions —
-            // keep only the canonical "Events" name; FindPart still accepts "Source" as alias.
-            bool hasEvents = names.Any(n => string.Equals(n, "Events", StringComparison.OrdinalIgnoreCase));
-            if (hasEvents)
+            // keep only the canonical "Events" name; GetPart still accepts "Source" as alias.
+            if (names.Any(n => string.Equals(n, "Events", StringComparison.OrdinalIgnoreCase)))
                 names.RemoveAll(n => string.Equals(n, "Source", StringComparison.OrdinalIgnoreCase));
 
             names.Sort(StringComparer.OrdinalIgnoreCase);

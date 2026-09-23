@@ -8,6 +8,21 @@ namespace GxMcp.Worker.Tests
     public sealed class SharedWorkerHostProtocolTests
     {
         [Fact]
+        public void ChildStdinWriter_EncodesUtf8WithoutBomAndUsesLf()
+        {
+            using (var stream = new System.IO.MemoryStream())
+            {
+                using (var writer = SharedWorkerHost.CreateChildStdinWriter(stream))
+                {
+                    writer.WriteLine("ação");
+                    writer.Flush();
+                }
+
+                Assert.Equal(new byte[] { 0x61, 0xC3, 0xA7, 0xC3, 0xA3, 0x6F, 0x0A }, stream.ToArray());
+            }
+        }
+
+        [Fact]
         public void AttachEnvelope_ParsesAndValidatesAgainstExactIdentity()
         {
             string identityKey = new string('a', 64);

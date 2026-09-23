@@ -34,6 +34,9 @@
     <PackageReference Include="System.Security.Permissions" Version="10.0.3" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\GxMcp.Shared\JsonIngress.cs" Link="Shared\JsonIngress.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="..\..\config\gx-versions.json" Link="config\gx-versions.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>

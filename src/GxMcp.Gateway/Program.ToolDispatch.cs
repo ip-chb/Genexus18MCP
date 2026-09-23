@@ -210,6 +210,7 @@ namespace GxMcp.Gateway
                     var hitMeta = hit["_meta"] as JObject ?? new JObject();
                     hit["_meta"] = hitMeta;
                     hitMeta["cacheOutcome"] = "hit";
+                    AttachExactReadIndexMetadata(hit, tName, tArgs);
                     _operationTracker.RecordCacheHit(tName);
                     return hit;
                 }
@@ -424,11 +425,26 @@ namespace GxMcp.Gateway
                 resultObj =>
                 {
                     JToken? finalResult = null;
+                    var omittedMutationFields = new JArray();
+                    JToken? workerPayload = resultObj["result"] ?? resultObj["error"];
+                    bool includePersistedText = IsMutatingTool(tName, tArgs)
+                        && (tArgs?["includePersistedText"]?.Value<bool?>() ?? false);
+                    JToken shapedPayload = workerPayload ?? JValue.CreateNull();
+                    try
+                    {
+                        shapedPayload = ShapeMutationResponse(workerPayload, tName, tArgs, omittedMutationFields);
+                    }
+                    catch (Exception exShape)
+                    {
+                        Log($"[Gateway] Mutation response shaping failed for {tName}: {exShape.Message}");
+                    }
                     try {
-                        finalResult = TruncateResponseIfNeeded(resultObj["result"] ?? resultObj["error"], tName);
+                        finalResult = includePersistedText
+                            ? shapedPayload
+                            : TruncateResponseIfNeeded(shapedPayload, tName);
                     } catch (Exception exTrunc) {
                         Log($"[Gateway] Error during truncation: {exTrunc.Message}");
-                        finalResult = resultObj["result"] ?? resultObj["error"];
+                        finalResult = shapedPayload;
                     }
 
                     if (string.Equals(tName, "genexus_edit_and_build", StringComparison.OrdinalIgnoreCase)
@@ -485,7 +501,7 @@ namespace GxMcp.Gateway
 
                     // ResponseSizeGuard: replace oversize JObject results with a truncation sentinel.
                     // Gated by PerfProfile.V1Enabled so it can be disabled via MCP_PERF_PROFILE=legacy.
-                    if (!isErr && PerfProfile.V1Enabled && finalResult is JObject finalJObj)
+                    if (!isErr && !includePersistedText && PerfProfile.V1Enabled && finalResult is JObject finalJObj)
                     {
                         var guard = new ResponseSizeGuard();
                         var (guarded, _) = guard.Apply(finalJObj, tName, tArgs);
@@ -527,6 +543,8 @@ namespace GxMcp.Gateway
                     // attached without cloning the entire response tree.
                     DetachResponsePayload(resultObj, finalResult);
                     var toolResult = BuildToolResultContent(finalResult, isErr, tName, tArgs, payloadOwned: true);
+                    AttachOmittedFieldsMetadata(toolResult, omittedMutationFields);
+                    AttachExactReadIndexMetadata(toolResult, tName, tArgs);
                     if (cKey != null)
                     {
                         var cacheMeta = toolResult["_meta"] as JObject ?? new JObject();
@@ -908,14 +926,10 @@ namespace GxMcp.Gateway
             JToken? idToken,
             CancellationToken transportCancellation)
         {
-            // build / rebuild actions go through path selection:
+            // build / rebuild actions, and specify with wait_until_done=true, go through path selection:
             //   - estimated_seconds &lt; BuildSyncThresholdSeconds  → sync fast-path (null)
             //   - estimated_seconds &gt;= BuildSyncThresholdSeconds  → async Task.Run, return job_id immediately
-            if (!(string.Equals(tName, "genexus_lifecycle", StringComparison.OrdinalIgnoreCase)
-                && (string.Equals(lcAction, "build", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(lcAction, "build_all", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(lcAction, "rebuild", StringComparison.OrdinalIgnoreCase))
-                && !IsLifecycleBuildDryRun(tArgs)))
+            if (!ShouldDispatchLifecycleBuildAsync(tName, lcAction, tArgs))
                 return null;
 
             // Issue #27 item 2: prefer a data-driven estimate (median of recent

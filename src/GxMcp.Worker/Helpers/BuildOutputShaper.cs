@@ -82,11 +82,14 @@ namespace GxMcp.Worker.Helpers
 
         public static bool TryWriteFullLog(string fullOutput, string taskId, out string path)
         {
+            return TryWriteFullLog(fullOutput, taskId, RuntimePaths.LogsRoot, out path);
+        }
+
+        internal static bool TryWriteFullLog(string fullOutput, string taskId, string logsDir, out string path)
+        {
             path = null;
             try
             {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string logsDir = Path.Combine(baseDir, "logs");
                 Directory.CreateDirectory(logsDir);
                 path = Path.Combine(logsDir, "build-" + taskId + ".log");
                 File.WriteAllText(path, fullOutput ?? string.Empty);

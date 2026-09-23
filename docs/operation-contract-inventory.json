@@ -18,7 +18,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "dry_run",
@@ -27,7 +28,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "create",
@@ -40,7 +42,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "update",
@@ -53,7 +56,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "delete",
@@ -66,7 +70,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -83,7 +88,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -100,7 +106,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "describe",
@@ -109,7 +116,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "suggest_macro",
@@ -118,7 +126,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "crystallize",
@@ -131,7 +140,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -148,7 +158,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -165,7 +176,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -182,7 +194,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -203,7 +216,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -220,7 +234,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -237,7 +252,8 @@
           "execution": "unknown",
           "retry": "never",
           "cache": "never",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -258,7 +274,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "build_all",
@@ -271,7 +288,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "cancel",
@@ -284,7 +302,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "specify",
@@ -297,7 +316,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "rebuild",
@@ -310,7 +330,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "reorg",
@@ -323,7 +344,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "reorg_preview",
@@ -332,7 +354,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "validate",
@@ -345,7 +368,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "validate-kb",
@@ -358,7 +382,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "sync",
@@ -371,7 +396,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "index",
@@ -384,7 +410,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "status",
@@ -393,7 +420,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "result",
@@ -402,7 +430,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "snapshots-list",
@@ -411,7 +440,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "snapshots-restore",
@@ -424,7 +454,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "inspect",
@@ -433,7 +464,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "reconcile",
@@ -446,7 +478,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -467,7 +500,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -484,7 +518,8 @@
           "execution": "unknown",
           "retry": "never",
           "cache": "never",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -498,14 +533,14 @@
           "action": null,
           "kind": "mutating",
           "effects": "process.write",
-          "execution": "worker",
+          "execution": "gateway",
           "retry": "operation_key",
           "cache": "never",
           "invalidation": [
-            "kb",
-            "dependents",
-            "collections"
-          ]
+            "process",
+            "sessions"
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -519,35 +554,61 @@
           "action": "recover",
           "kind": "mutating",
           "effects": "process.write",
-          "execution": "worker",
+          "execution": "gateway",
           "retry": "operation_key",
           "cache": "never",
           "invalidation": [
-            "kb",
-            "dependents",
-            "collections"
-          ]
+            "process",
+            "sessions"
+          ],
+          "previewSupported": false
         },
         {
           "action": "journal_status",
           "kind": "readOnly",
-          "effects": "kb.read",
-          "execution": "worker",
+          "effects": "file.read",
+          "execution": "gateway",
           "retry": "safe",
-          "cache": "semantic",
-          "invalidation": []
+          "cache": "never",
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "journal_repair",
-          "kind": "mutating",
-          "effects": "process.write",
-          "execution": "worker",
-          "retry": "operation_key",
+          "kind": "readOnly",
+          "effects": "file.read",
+          "execution": "gateway",
+          "retry": "safe",
           "cache": "never",
-          "invalidation": [
-            "kb",
-            "dependents",
-            "collections"
+          "invalidation": [],
+          "previewSupported": true,
+          "variants": [
+            {
+              "selector": {
+                "dryRun": "not false"
+              },
+              "kind": "readOnly",
+              "effects": "file.read",
+              "execution": "gateway",
+              "retry": "safe",
+              "cache": "never",
+              "invalidation": [],
+              "previewSupported": true
+            },
+            {
+              "selector": {
+                "dryRun": false
+              },
+              "kind": "mutating",
+              "effects": "file.write",
+              "execution": "gateway",
+              "retry": "operation_key",
+              "cache": "never",
+              "invalidation": [
+                "files"
+              ],
+              "previewSupported": true
+            }
           ]
         }
       ],
@@ -569,7 +630,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -590,7 +652,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "RenameVariable",
@@ -603,7 +666,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "RenameObject",
@@ -616,7 +680,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "ExtractProcedure",
@@ -629,7 +694,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "ExtractSubroutine",
@@ -642,7 +708,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "WWPSetCondition",
@@ -655,7 +722,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -672,7 +740,8 @@
           "execution": "unknown",
           "retry": "never",
           "cache": "never",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -689,7 +758,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -706,7 +776,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "define_api",
@@ -719,7 +790,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "deploy",
@@ -732,7 +804,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -749,7 +822,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "set",
@@ -762,7 +836,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "move",
@@ -775,7 +850,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -792,7 +868,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "update_visual",
@@ -805,7 +882,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "get_indexes",
@@ -814,7 +892,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "create_index",
@@ -827,7 +906,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "drop_index",
@@ -840,7 +920,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "set_attribute",
@@ -853,7 +934,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "set_level",
@@ -866,7 +948,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "set_domain",
@@ -879,7 +962,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "get_logic",
@@ -888,7 +972,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "update_group",
@@ -901,7 +986,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "move_attribute",
@@ -914,7 +1000,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "remove_attribute",
@@ -927,7 +1014,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "check_subtypes",
@@ -936,7 +1024,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -957,7 +1046,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "add_external_property",
@@ -970,7 +1060,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "add_menu_option",
@@ -983,7 +1074,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "add_condition",
@@ -996,7 +1088,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1013,7 +1106,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "set_property",
@@ -1026,7 +1120,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "find_controls",
@@ -1035,7 +1130,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "set_properties",
@@ -1048,7 +1144,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "inspect_surface",
@@ -1057,7 +1154,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "get_preview",
@@ -1066,7 +1164,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "scan_mutators",
@@ -1075,7 +1174,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "rename_printblock",
@@ -1088,7 +1188,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "add_printblock",
@@ -1101,7 +1202,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "delete_printblock",
@@ -1114,7 +1216,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "list_controls",
@@ -1123,7 +1226,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "design_system",
@@ -1132,7 +1236,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1153,7 +1258,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "visualize",
@@ -1166,7 +1272,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "health",
@@ -1175,7 +1282,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1192,7 +1300,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1209,7 +1318,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "open",
@@ -1222,7 +1332,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "close",
@@ -1235,7 +1346,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "select",
@@ -1248,7 +1360,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "set_session_default",
@@ -1261,7 +1374,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "set_persistent_default",
@@ -1274,7 +1388,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "set_default",
@@ -1287,7 +1402,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "set_startup",
@@ -1300,7 +1416,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "get_startup",
@@ -1309,7 +1426,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "list_environments",
@@ -1318,7 +1436,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "get_environment",
@@ -1327,7 +1446,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "set_environment",
@@ -1340,7 +1460,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "create",
@@ -1353,7 +1474,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1374,7 +1496,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1391,7 +1514,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "describe",
@@ -1400,7 +1524,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "routes_inspect",
@@ -1409,7 +1534,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "routes_clone",
@@ -1422,7 +1548,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "routes_update",
@@ -1435,7 +1562,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "snapshot",
@@ -1448,7 +1576,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "diff_baseline",
@@ -1457,7 +1586,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "export_openapi",
@@ -1466,7 +1596,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "import_openapi",
@@ -1475,7 +1606,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1492,7 +1624,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "add_grid_action",
@@ -1505,7 +1638,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "add_user_action",
@@ -1518,7 +1652,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "update_action",
@@ -1531,7 +1666,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "move_action",
@@ -1544,7 +1680,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "remove_action",
@@ -1557,7 +1694,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -1578,7 +1716,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1595,7 +1734,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "scan_secrets",
@@ -1604,7 +1744,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "scan_native",
@@ -1613,7 +1754,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1630,7 +1772,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1651,7 +1794,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "add_button",
@@ -1664,7 +1808,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "set_visibility",
@@ -1677,7 +1822,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "remove_control",
@@ -1690,7 +1836,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "wrap_in_fieldset",
@@ -1703,7 +1850,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -1720,7 +1868,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1741,7 +1890,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "install_builtin",
@@ -1754,7 +1904,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "update",
@@ -1767,7 +1918,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "list",
@@ -1776,7 +1928,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "package",
@@ -1789,7 +1942,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "publish",
@@ -1802,7 +1956,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "restore",
@@ -1815,7 +1970,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "list_modules_servers",
@@ -1824,7 +1980,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "add_modules_server",
@@ -1837,7 +1994,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "search_modules_in_servers",
@@ -1846,7 +2004,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1863,7 +2022,8 @@
           "execution": "unknown",
           "retry": "never",
           "cache": "never",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -1880,7 +2040,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "pending",
@@ -1889,7 +2050,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "ignored",
@@ -1898,7 +2060,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "conflicts",
@@ -1907,7 +2070,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "history",
@@ -1916,7 +2080,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "commit",
@@ -1929,7 +2094,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "update",
@@ -1942,7 +2108,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "lock",
@@ -1955,7 +2122,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "resolve",
@@ -1968,7 +2136,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "pipeline_list",
@@ -1977,7 +2146,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "pipeline_runs",
@@ -1986,7 +2156,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "pipeline_output",
@@ -1995,7 +2166,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "pipeline_run",
@@ -2008,7 +2180,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "pipeline_abort",
@@ -2021,7 +2194,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -2038,7 +2212,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "changed_objects",
@@ -2047,7 +2222,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "freeze",
@@ -2060,7 +2236,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "branch",
@@ -2073,7 +2250,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "set_active",
@@ -2086,7 +2264,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "revert",
@@ -2099,7 +2278,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -2116,7 +2296,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "a11y",
@@ -2125,7 +2306,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "wcag",
@@ -2134,7 +2316,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "capture",
@@ -2143,7 +2326,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "cross",
@@ -2152,7 +2336,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "preview",
@@ -2161,7 +2346,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -2178,7 +2364,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "drift_report",
@@ -2187,7 +2374,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "optimize_analyze",
@@ -2196,7 +2384,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "optimize_suggest",
@@ -2205,7 +2394,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "optimize_report",
@@ -2214,7 +2404,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "sql_ddl",
@@ -2223,7 +2414,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "sql_navigation",
@@ -2232,7 +2424,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "sample_data",
@@ -2245,7 +2438,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "records_query",
@@ -2254,7 +2448,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "records_insert",
@@ -2267,7 +2462,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "records_update",
@@ -2280,7 +2476,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "types_list",
@@ -2289,7 +2486,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "types_describe",
@@ -2298,7 +2496,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "types_validate",
@@ -2307,7 +2506,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "translations_import",
@@ -2320,7 +2520,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "reorg_impact",
@@ -2329,7 +2530,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "reorg_preview",
@@ -2338,7 +2540,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -2355,7 +2558,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "history_get",
@@ -2364,7 +2568,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "history_save",
@@ -2377,7 +2582,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "history_restore",
@@ -2390,7 +2596,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "undo",
@@ -2403,7 +2610,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "time_travel",
@@ -2412,7 +2620,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "blame",
@@ -2421,7 +2630,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "diff",
@@ -2430,7 +2640,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "diff_generated",
@@ -2439,7 +2650,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -2456,7 +2668,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "asset_read",
@@ -2465,7 +2678,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "asset_write",
@@ -2478,7 +2692,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "read_blob",
@@ -2487,7 +2702,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "export_part",
@@ -2500,7 +2716,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "import_part",
@@ -2513,7 +2730,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "export_kb_to_text",
@@ -2526,7 +2744,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "import_text_to_kb",
@@ -2539,7 +2758,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "validate_kb_text_files",
@@ -2548,7 +2768,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "validate_text_in_memory",
@@ -2557,7 +2778,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "list_text_files",
@@ -2566,7 +2788,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "text_mirror_start",
@@ -2579,7 +2802,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "text_mirror_stop",
@@ -2592,7 +2816,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "text_mirror_status",
@@ -2601,7 +2826,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "text_mirror_catchup",
@@ -2614,7 +2840,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "text_mirror_set_references",
@@ -2627,7 +2854,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "delete_kb_objects",
@@ -2640,7 +2868,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "export_unified",
@@ -2653,7 +2882,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "screenshot_publish",
@@ -2666,7 +2896,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "ocr",
@@ -2675,7 +2906,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -2696,7 +2928,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "delete",
@@ -2709,7 +2942,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "modify",
@@ -2722,7 +2956,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -2739,7 +2974,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "watch_event",
@@ -2748,7 +2984,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "friction_append",
@@ -2761,7 +2998,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "friction_tail",
@@ -2770,7 +3008,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "learning_report",
@@ -2779,7 +3018,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "logs",
@@ -2788,7 +3028,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "profile_analyze",
@@ -2797,7 +3038,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "profile_hotspots",
@@ -2806,7 +3048,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "profile_correlate",
@@ -2815,7 +3058,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -2836,7 +3080,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "object_atomic",
@@ -2849,7 +3094,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "popup",
@@ -2862,7 +3108,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "sd_panel_create",
@@ -2875,7 +3122,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "sd_panel_inspect",
@@ -2884,7 +3132,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "sd_panel_edit",
@@ -2897,7 +3146,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "save_as",
@@ -2910,7 +3160,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "scaffold",
@@ -2923,7 +3174,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "translate",
@@ -2936,7 +3188,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "sample",
@@ -2949,7 +3202,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "template",
@@ -2962,7 +3216,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "curl_procedure",
@@ -2975,7 +3230,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -2996,7 +3252,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "recall",
@@ -3005,7 +3262,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "list",
@@ -3014,7 +3272,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "forget",
@@ -3027,7 +3286,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "promote",
@@ -3040,7 +3300,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "consolidate",
@@ -3053,7 +3314,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -3074,7 +3336,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "inspect",
@@ -3083,7 +3346,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "import",
@@ -3096,7 +3360,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -3113,7 +3378,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "deploy",
@@ -3126,7 +3392,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -3143,7 +3410,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "dry_run_add",
@@ -3152,7 +3420,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "add",
@@ -3165,7 +3434,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "dry_run_remove",
@@ -3174,7 +3444,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "remove",
@@ -3187,7 +3458,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -3204,7 +3476,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "add_action",
@@ -3217,7 +3490,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "add_user_action",
@@ -3230,7 +3504,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "update_action",
@@ -3243,7 +3518,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "move_action",
@@ -3256,7 +3532,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "remove_action",
@@ -3269,7 +3546,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "add_tab",
@@ -3282,7 +3560,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "move_tab",
@@ -3295,7 +3574,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "remove_tab",
@@ -3308,7 +3588,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "set_table_type",
@@ -3321,7 +3602,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "add_grid_attribute",
@@ -3334,7 +3616,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "replace_web_component_with_user_action",
@@ -3347,7 +3630,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         },
         {
           "action": "settings_templates",
@@ -3356,7 +3640,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "settings_read",
@@ -3365,7 +3650,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         },
         {
           "action": "settings_edit",
@@ -3378,7 +3664,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": true
         }
       ],
       "inputExamples": 0,
@@ -3395,7 +3682,8 @@
           "execution": "worker",
           "retry": "safe",
           "cache": "semantic",
-          "invalidation": []
+          "invalidation": [],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -3416,7 +3704,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -3437,7 +3726,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         },
         {
           "action": "remove",
@@ -3450,7 +3740,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,
@@ -3471,7 +3762,8 @@
             "kb",
             "dependents",
             "collections"
-          ]
+          ],
+          "previewSupported": false
         }
       ],
       "inputExamples": 0,

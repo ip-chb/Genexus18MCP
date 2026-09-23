@@ -23,21 +23,38 @@ namespace GxMcp.Gateway
     partial class Program
     {
 
-        internal static bool IsLifecycleBuildDryRun(JObject args)
+        internal static bool IsLifecycleBuildDryRun(JObject? args)
         {
             return args?["dryRun"]?.ToObject<bool?>() == true;
+        }
+
+        internal static bool ShouldDispatchLifecycleBuildAsync(
+            string? toolName, string? lifecycleAction, JObject? args)
+        {
+            if (!string.Equals(toolName, "genexus_lifecycle", StringComparison.OrdinalIgnoreCase)
+                || IsLifecycleBuildDryRun(args))
+                return false;
+
+            if (string.Equals(lifecycleAction, "build", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(lifecycleAction, "build_all", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(lifecycleAction, "rebuild", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return string.Equals(lifecycleAction, "specify", StringComparison.OrdinalIgnoreCase)
+                && args?["wait_until_done"]?.ToObject<bool?>() == true;
         }
 
         internal static JObject BuildAsyncLifecycleCommand(string lifecycleAction, JObject args, string cancelToken)
         {
             bool rebuild = string.Equals(lifecycleAction, "rebuild", StringComparison.OrdinalIgnoreCase);
             bool buildAll = string.Equals(lifecycleAction, "build_all", StringComparison.OrdinalIgnoreCase);
+            bool specify = string.Equals(lifecycleAction, "specify", StringComparison.OrdinalIgnoreCase);
             bool compileCheck = string.Equals(lifecycleAction, "build", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(args?["mode"]?.ToString(), "compile_check", StringComparison.OrdinalIgnoreCase);
-            return new JObject
+            var command = new JObject
             {
                 ["module"] = "Build",
-                ["action"] = compileCheck ? "CompileCheck" : rebuild ? "RebuildAll" : buildAll ? "BuildAll" : "Build",
+                ["action"] = specify ? "Specify" : compileCheck ? "CompileCheck" : rebuild ? "RebuildAll" : buildAll ? "BuildAll" : "Build",
                 ["target"] = args?["target"]?.ToString(),
                 ["client"] = "mcp",
                 ["includeCallees"] = args?["includeCallees"]?.ToString(),
@@ -50,6 +67,7 @@ namespace GxMcp.Gateway
                 ["deploy"] = (bool?)args?["deploy"] ?? false,
                 ["cancelToken"] = cancelToken
             };
+            return command;
         }
 
         /// <summary>

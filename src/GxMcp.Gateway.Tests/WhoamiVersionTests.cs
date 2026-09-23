@@ -94,6 +94,11 @@ namespace GxMcp.Gateway.Tests
             var legacyMajors = Assert.IsType<JArray>(payload["geneXus"]?["catalog"]?["legacyMajors"]);
             Assert.Contains("8", legacyMajors.ToObject<string[]>() ?? Array.Empty<string>());
             Assert.NotNull(payload["geneXus"]?["catalog"]?["source"]);
+
+            var profile = Assert.IsType<JObject>(payload["toolProfile"]);
+            Assert.Equal("all", profile["active"]?.ToString());
+            Assert.Contains("all", profile["availableProfiles"]?.ToObject<string[]>() ?? Array.Empty<string>());
+            Assert.Contains("GXMCP_PROFILE", profile["hint"]?.ToString());
         }
 
         [Fact]

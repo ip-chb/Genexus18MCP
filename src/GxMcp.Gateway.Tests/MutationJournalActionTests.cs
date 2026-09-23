@@ -61,10 +61,34 @@ namespace GxMcp.Gateway.Tests
         {
             var args = new JObject { ["action"] = action, ["dryRun"] = dryRun };
             var contract = OperationClassifier.Describe("genexus_connection_recover", args);
+            bool preview = action == "journal_status" || dryRun;
+            Assert.Equal(preview ? OperationClassifier.OperationKind.ReadOnly : OperationClassifier.OperationKind.Mutating, contract.Kind);
             Assert.Equal(effect, contract.Effects);
             Assert.Equal("gateway", contract.Execution);
+            Assert.Equal(preview ? "safe" : "operation_key", contract.Retry);
             Assert.Equal("never", contract.Cache);
+            Assert.Equal(preview ? Array.Empty<string>() : new[] { "files" }, contract.Invalidation);
+            Assert.Equal(action == "journal_repair", contract.PreviewSupported);
             Assert.False(OperationClassifier.RequiresSessionLease("genexus_connection_recover", args));
+        }
+
+        [Fact]
+        public void JournalRepairMissingOrNullDryRunIsAReadOnlyPreview()
+        {
+            var missing = new JObject { ["action"] = "journal_repair" };
+            var nullValue = new JObject { ["action"] = "journal_repair", ["dryRun"] = JValue.CreateNull() };
+
+            foreach (JObject args in new[] { missing, nullValue })
+            {
+                var contract = OperationClassifier.Describe("genexus_connection_recover", args);
+                Assert.Equal(OperationClassifier.OperationKind.ReadOnly, contract.Kind);
+                Assert.Equal("file.read", contract.Effects);
+                Assert.Equal("gateway", contract.Execution);
+                Assert.Equal("safe", contract.Retry);
+                Assert.Equal("never", contract.Cache);
+                Assert.Empty(contract.Invalidation);
+                Assert.True(contract.PreviewSupported);
+            }
         }
 
         [Theory]

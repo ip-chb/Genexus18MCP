@@ -199,7 +199,7 @@ namespace GxMcp.Gateway
                 string resolverAction = resolverArgs?["action"]?.ToString() ?? string.Empty;
                 bool kbEnvironmentTool = OperationClassifier.IsKbEnvironmentAction(toolNameForResolver, resolverAction);
                 bool kbEnvironmentMutation = OperationClassifier.IsKbEnvironmentMutation(toolNameForResolver, resolverAction);
-                bool explicitReadOnlyMetaKb = !string.IsNullOrWhiteSpace(resolverArgs?["kb"]?.ToString())
+                bool explicitReadOnlyMetaKb = !string.IsNullOrWhiteSpace(resolverArgs?["kb"]?.ToString() ?? resolverArgs?["kbAlias"]?.ToString())
                     && OperationClassifier.IsKbScopedReadMetaTool(toolNameForResolver);
                 statefulMetaTool |= kbEnvironmentMutation;
                 bool needsKbResolution =
@@ -218,12 +218,15 @@ namespace GxMcp.Gateway
                         {
                             var paramsObj = request["params"] as JObject;
                             var argsObj = paramsObj?["arguments"] as JObject;
-                            kbArg = argsObj?["kb"]?.ToString() ?? argsObj?["alias"]?.ToString();
+                            kbArg = argsObj?["kb"]?.ToString() ?? argsObj?["kbAlias"]?.ToString() ?? argsObj?["alias"]?.ToString();
                             // Strip `kb` from worker-bound args (worker is single-KB scoped),
                             // but keep it for gateway-only reload so lease bypass and the
                             // explicit target remain available to the orchestrator below.
                             if (!string.Equals(toolNameForResolver, "genexus_worker_reload", StringComparison.OrdinalIgnoreCase))
+                            {
                                 argsObj?.Remove("kb");
+                                argsObj?.Remove("kbAlias");
+                            }
                         }
                         else if (string.Equals(method, "resources/read", StringComparison.OrdinalIgnoreCase))
                         {
@@ -248,10 +251,10 @@ namespace GxMcp.Gateway
                         SessionKbContextStore.Snapshot? sessionSnapshot = null;
                         if (sessionContextEnabled)
                             _sessionKbContexts.TryGetSnapshot(sessionId, out sessionSnapshot);
-                        if (_currentExplicitKb.Value
-                            && sessionSnapshot?.Lease != null
+                        if (sessionSnapshot?.Lease != null
                             && _currentKb.Value != null
-                            && string.Equals(sessionSnapshot.KbId, _currentKb.Value.KbId, StringComparison.Ordinal))
+                            && (string.Equals(sessionSnapshot.KbId, _currentKb.Value.KbId, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(sessionSnapshot.KbId, _currentKb.Value.NormalizedAlias, StringComparison.OrdinalIgnoreCase)))
                         {
                             var renewal = _kbLeases.Renew(
                                 sessionSnapshot.Lease.Token,
@@ -265,6 +268,19 @@ namespace GxMcp.Gateway
                                     sessionSnapshot.KbId,
                                     sessionSnapshot.ContextGeneration,
                                     renewal.Lease);
+                            }
+                            else if (_currentExplicitKb.Value && renewal.Status == KbUseLeaseOperationStatus.Expired)
+                            {
+                                long generation = sessionSnapshot.ContextGeneration + 1;
+                                string identity = sessionSnapshot.Lease.Identity ?? (_currentKb.Value.Path ?? string.Empty).Trim().TrimEnd('\\', '/').ToLowerInvariant();
+                                string canonicalAlias = sessionSnapshot.KbId ?? CanonicalizeKbAlias(_currentKb.Value.Alias);
+                                var freshLease = _kbLeases.Open(sessionId, canonicalAlias, generation, identity, "session-" + generation, TimeSpan.FromMinutes(10));
+                                _sessionKbContexts.Set(sessionId, _currentKb.Value.Alias, canonicalAlias, freshLease);
+                                sessionSnapshot = new SessionKbContextStore.Snapshot(
+                                    sessionId,
+                                    canonicalAlias,
+                                    generation,
+                                    freshLease);
                             }
                         }
                         _currentSessionContext.Value = sessionSnapshot;
@@ -448,6 +464,17 @@ namespace GxMcp.Gateway
                     {
                         paramsObj["name"] = rewrittenName;
                         paramsObj["arguments"] = rewrittenArgs;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(toolName))
+                {
+                    string activeToolProfile = ToolProfileFilter.ResolveActiveProfile(_activeConfig?.Server?.ToolProfile);
+                    JObject? profileError = ToolProfileFilter.GetToolNotInProfileError(activeToolProfile, toolName);
+                    if (profileError != null)
+                    {
+                        return BuildToolTextResponse(idToken, profileError, isError: true,
+                            toolName: toolName, toolArgs: args, payloadOwned: true);
                     }
                 }
 

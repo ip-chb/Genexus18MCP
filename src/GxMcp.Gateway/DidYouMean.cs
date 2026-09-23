@@ -54,19 +54,45 @@ namespace GxMcp.Gateway
             if (string.IsNullOrEmpty(input)) return null;
             string? best = null;
             int bestDist = int.MaxValue;
-            foreach (var candidate in candidates)
+            var list = candidates.Where(c => c != null).ToList();
+            foreach (var candidate in list)
             {
-                if (candidate == null) continue;
-                if (Math.Abs(input.Length - candidate.Length) > maxDistance) continue;
-                int d = Levenshtein(input, candidate);
-                if (d < bestDist)
+                if (Math.Abs(input.Length - candidate.Length) <= maxDistance)
                 {
-                    bestDist = d;
-                    best = candidate;
-                    if (d == 0) break;
+                    int d = Levenshtein(input, candidate);
+                    if (d < bestDist)
+                    {
+                        bestDist = d;
+                        best = candidate;
+                        if (d == 0) break;
+                    }
                 }
             }
-            return bestDist <= maxDistance ? best : null;
+            if (bestDist <= maxDistance) return best;
+
+            // Prefix / stem matching (e.g. "objects" -> "objectName", "procs" -> "procedures")
+            string lowerInput = input.ToLowerInvariant();
+            string stem = lowerInput.Length >= 4 && lowerInput.EndsWith("s") ? lowerInput.Substring(0, lowerInput.Length - 1) : lowerInput;
+
+            foreach (var candidate in list)
+            {
+                string lowerCand = candidate.ToLowerInvariant();
+                if (lowerCand.StartsWith(lowerInput) || (stem.Length >= 4 && lowerCand.StartsWith(stem)))
+                {
+                    return candidate;
+                }
+            }
+
+            // Common arg synonyms (e.g. "limit" -> "maxResults")
+            if (string.Equals(input, "limit", StringComparison.OrdinalIgnoreCase))
+            {
+                var match = list.FirstOrDefault(c => string.Equals(c, "maxResults", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(c, "max", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(c, "take", StringComparison.OrdinalIgnoreCase));
+                if (match != null) return match;
+            }
+
+            return null;
         }
 
         public static string FormatSuggestionMessage(string field, string value, IEnumerable<string> candidates, int maxDistance = 2)

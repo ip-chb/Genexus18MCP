@@ -22,6 +22,86 @@ namespace GxMcp.Worker.Tests
         }
 
         [Fact]
+        public void BatchGet_PreservesOrderAndReturnsPerTargetErrors()
+        {
+            var targets = new JArray
+            {
+                new JObject { ["name"] = "ProcA", ["type"] = "Procedure" },
+                new JObject { ["name"] = "Missing", ["type"] = "Procedure" }
+            };
+            var calls = new List<string>();
+
+            string raw = PropertyService.ShapeGetPropertiesBatchResult(targets, (name, type) =>
+            {
+                calls.Add(name);
+                if (name == "ProcA")
+                {
+                    return new JObject
+                    {
+                        ["status"] = "ok",
+                        ["result"] = new JObject
+                        {
+                            ["values"] = new JObject { ["MainProgram"] = true },
+                            ["missingProperties"] = new JArray("Description"),
+                            ["versionToken"] = "version-a"
+                        }
+                    }.ToString();
+                }
+
+                return new JObject
+                {
+                    ["status"] = "error",
+                    ["error"] = new JObject { ["code"] = "ObjectNotFound", ["message"] = "Object not found." }
+                }.ToString();
+            });
+
+            var json = JObject.Parse(raw);
+            var result = json["result"] as JObject;
+            var results = result?["results"] as JArray;
+            Assert.Equal(new[] { "ProcA", "Missing" }, calls);
+            Assert.Equal("partial", json["status"]?.ToString());
+            Assert.Equal("ProcA", results?[0]?["name"]?.ToString());
+            Assert.Equal("ok", results?[0]?["status"]?.ToString());
+            Assert.Equal("True", results?[0]?["values"]?["MainProgram"]?.ToString());
+            Assert.Equal("Description", results?[0]?["missingProperties"]?[0]?.ToString());
+            Assert.Equal("version-a", results?[0]?["versionToken"]?.ToString());
+            Assert.Equal("Missing", results?[1]?["name"]?.ToString());
+            Assert.Equal("ObjectNotFound", results?[1]?["error"]?["code"]?.ToString());
+        }
+
+        [Fact]
+        public void BatchGet_StopsAtLimitAndMarksRemainingTargets()
+        {
+            var targets = new JArray
+            {
+                new JObject { ["name"] = "ProcA" },
+                new JObject { ["name"] = "ProcB" },
+                new JObject { ["name"] = "ProcC" }
+            };
+            int calls = 0;
+
+            string raw = PropertyService.ShapeGetPropertiesBatchResult(
+                targets,
+                (name, type) =>
+                {
+                    calls++;
+                    return new JObject
+                    {
+                        ["status"] = "ok",
+                        ["result"] = new JObject { ["values"] = new JObject { ["MainProgram"] = name == "ProcA" } }
+                    }.ToString();
+                },
+                maxTargets: 2);
+
+            var json = JObject.Parse(raw);
+            Assert.Equal(2, calls);
+            Assert.Equal(2, (int)json["result"]?["processedCount"]);
+            Assert.Equal(3, (int)json["result"]?["requestedCount"]);
+            Assert.True((bool)json["result"]?["truncated"]);
+            Assert.Equal("partial", json["status"]?.ToString());
+        }
+
+        [Fact]
         public void InvalidTypedValueIsRejectedBeforeAnySave()
         {
             dynamic container = Container(

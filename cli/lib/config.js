@@ -8,6 +8,7 @@ function generateConfig(gxPath, kbPath) {
         Server: {
             HttpPort: 5000,
             McpStdio: true,
+            ToolProfile: 'standard',
             SessionIdleTimeoutMinutes: 10,
             WorkerIdleTimeoutMinutes: 5,
             // Lean + terse defaults: the MCP client is an LLM agent that reads
@@ -33,6 +34,7 @@ function generateNeutralConfig(gxPath, { workerPath, gatewayMode = 'stdio-isolat
         Server: {
             HttpPort: 0,
             McpStdio: true,
+            ToolProfile: 'standard',
             WorkerSharingMode: 'isolated',
             SessionIdleTimeoutMinutes: 10,
             WorkerIdleTimeoutMinutes: 5,
@@ -657,8 +659,17 @@ function createConfigFile(kbPath, gxPath) {
     }
     const nextConfig = {
         ...baseConfig,
+        Server: { ...baseConfig.Server },
         Environment: { ...baseConfig.Environment, ...preservedEnv }
     };
+
+    if (existing) {
+        if (existing.Server && Object.prototype.hasOwnProperty.call(existing.Server, 'ToolProfile')) {
+            nextConfig.Server.ToolProfile = existing.Server.ToolProfile;
+        } else {
+            delete nextConfig.Server.ToolProfile;
+        }
+    }
 
     const changed = !existing || JSON.stringify(existing) !== JSON.stringify(nextConfig);
     if (changed) {

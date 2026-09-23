@@ -122,6 +122,27 @@ namespace GxMcp.Gateway.Tests
         }
 
         [Fact]
+        public void TrimErrorEnvelope_NoMatchFromShorthandDryRunPreservesNearMatchDiagnostics()
+        {
+            var workerResult = JObject.Parse(@"{""status"":""error"",
+                ""error"":{""code"":""NoMatch"",""message"":""Context block not found."",
+                    ""part"":""Events"",""noNearMatchHint"":""Re-read a smaller exact block."",
+                    ""nearMatches"":[{""line"":12,""snippet"":""Event Start""}],
+                    ""eolDiff"":[{""lineNo"":12,""agent"":""Event Start"",""file"":""Event Start""}],
+                    ""did_you_mean"":[""EventStart""]}}");
+
+            var response = McpRouter.TrimErrorEnvelope(workerResult, verbose: false);
+
+            Assert.Equal("NoMatch", response["code"]?.ToString());
+            Assert.NotNull(response["nearMatches"]);
+            Assert.NotNull(response["eolDiff"]);
+            Assert.NotNull(response["did_you_mean"]);
+            Assert.Equal("Re-read a smaller exact block.", response["noNearMatchHint"]?.ToString());
+            Assert.Equal("inspect_near_match", response["suggested_next_step"]?["action"]?.ToString());
+            Assert.Contains("response.nearMatches", response["suggested_next_step"]?["hint"]?.ToString());
+        }
+
+        [Fact]
         public void TrimErrorEnvelope_SynthesizesHint_WhenNoneOnPayload()
         {
             var err = JObject.Parse(@"{""code"":""patch_no_match"",""message"":""Context not found.""}");

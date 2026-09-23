@@ -138,7 +138,7 @@ namespace GxMcp.Gateway
             if (string.IsNullOrWhiteSpace(line)) return false;
             try
             {
-                JObject frame = JObject.Parse(line);
+                JObject frame = GxMcp.Common.JsonIngress.ParseObject(line);
                 string frameType = frame["gxmcp"]?.ToString() ?? frame["type"]?.ToString() ?? string.Empty;
                 if (!string.Equals(frameType, "attach_ack", StringComparison.Ordinal))
                 {
@@ -375,7 +375,7 @@ namespace GxMcp.Gateway
 
         private static JObject? TryParseObject(string line)
         {
-            try { return JObject.Parse(line); } catch { return null; }
+            try { return GxMcp.Common.JsonIngress.ParseObject(line); } catch { return null; }
         }
 
         private static long GetCurrentProcessStartTicks()

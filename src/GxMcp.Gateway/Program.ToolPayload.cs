@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -484,6 +485,314 @@ namespace GxMcp.Gateway
                 && OperationClassifier.IsMutationCandidate(toolName, args);
         }
 
+        private const int MutationResponseBudgetBytes = 8 * 1024;
+        private const int MutationEditPatchResponseTargetBytes = 2 * 1024 - 64;
+        private const int MutationDiffLineLimit = 40;
+        private const int MutationDiffByteLimit = 4096;
+        private const int MutationDiffLineByteLimit = 96;
+        private const int MutationTextMinimumOmitBytes = 256;
+
+        internal static JToken ShapeMutationResponse(JToken? payload, string toolName, JObject? args, JArray omittedFields)
+        {
+            if (payload == null) return JValue.CreateNull();
+            if (!IsMutatingTool(toolName, args)
+                || (args?["includePersistedText"]?.Value<bool?>() ?? false))
+                return payload;
+
+            string action = args?["action"]?.ToString() ?? string.Empty;
+            bool compactVariableWrite = string.Equals(toolName, "genexus_variable", StringComparison.OrdinalIgnoreCase)
+                && (action.StartsWith("add", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(action, "modify", StringComparison.OrdinalIgnoreCase));
+            bool compactEditPatch = string.Equals(toolName, "genexus_edit", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(args?["mode"]?.ToString(), "patch", StringComparison.OrdinalIgnoreCase);
+            bool successfulMutation = IsSuccessfulMutationPayload(payload);
+
+            if (compactVariableWrite && successfulMutation)
+            {
+                string? variableSource = FindStringProperty(payload, "source");
+                if (variableSource != null)
+                {
+                    JObject? result = payload["result"] as JObject ?? payload as JObject;
+                    if (result != null)
+                    {
+                        result["persistedVariableCount"] = System.Text.RegularExpressions.Regex.Matches(
+                            variableSource, @"(?m)^\s*&[A-Za-z_][A-Za-z0-9_]*\s*:").Count;
+                        JArray changes = BuildRequestedVariableChanges(args);
+                        if (changes.Count > 0) result["changedVariables"] = changes;
+                    }
+                }
+                RemoveMutationPayloadProperties(payload, "persistedSnippet", string.Empty, omittedFields);
+            }
+
+            RemoveMutationPayloadProperties(payload, "source", string.Empty, omittedFields, successfulMutation);
+            RemoveMutationPayloadProperties(payload, "content", string.Empty, omittedFields, successfulMutation);
+            BoundMutationDiffs(payload);
+
+            if (compactEditPatch && successfulMutation)
+                CompactSuccessfulEditPatchResponse(payload, omittedFields);
+
+            if (Encoding.UTF8.GetByteCount(payload.ToString(Formatting.None)) > MutationResponseBudgetBytes)
+                RemoveMutationPayloadProperties(payload, "persistedSnippet", string.Empty, omittedFields);
+
+            return payload;
+        }
+
+        internal static void AttachOmittedFieldsMetadata(JObject toolResult, JArray omittedFields)
+        {
+            if (toolResult == null || omittedFields == null || omittedFields.Count == 0) return;
+            var meta = toolResult["_meta"] as JObject;
+            if (meta == null)
+            {
+                meta = new JObject();
+                toolResult["_meta"] = meta;
+            }
+            var existing = meta["omittedFields"] as JArray;
+            if (existing == null)
+            {
+                existing = new JArray();
+                meta["omittedFields"] = existing;
+            }
+            foreach (var field in omittedFields)
+            {
+                string value = field.ToString();
+                if (!existing.Any(item => string.Equals(item.ToString(), value, StringComparison.OrdinalIgnoreCase)))
+                    existing.Add(value);
+            }
+        }
+
+        private static bool IsSuccessfulMutationPayload(JToken payload)
+        {
+            if (payload["error"] != null) return false;
+            string status = payload["status"]?.ToString()
+                ?? payload["result"]?["status"]?.ToString()
+                ?? string.Empty;
+            return string.Equals(status, "success", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static JArray BuildRequestedVariableChanges(JObject? args)
+        {
+            if (args?["variables"] is JArray variables)
+            {
+                var changes = new JArray();
+                foreach (var variable in variables) changes.Add(variable.DeepClone());
+                return changes;
+            }
+
+            string? varName = args?["varName"]?.ToString();
+            if (string.IsNullOrWhiteSpace(varName)) return new JArray();
+            var change = new JObject { ["name"] = varName.TrimStart('&') };
+            foreach (string field in new[] { "typeName", "newTypeName", "dataType", "length", "decimals", "collection", "basedOn", "basedOnAttribute" })
+            {
+                if (args?[field] is JToken value) change[field] = value.DeepClone();
+            }
+            return new JArray(change);
+        }
+
+        private static string? FindStringProperty(JToken token, string propertyName)
+        {
+            if (token is JObject obj)
+            {
+                var match = obj.Properties().FirstOrDefault(property =>
+                    string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase));
+                if (match?.Value.Type == JTokenType.String) return match.Value.ToString();
+                foreach (var property in obj.Properties())
+                {
+                    string? nested = FindStringProperty(property.Value, propertyName);
+                    if (nested != null) return nested;
+                }
+            }
+            else if (token is JArray array)
+            {
+                foreach (var item in array)
+                {
+                    string? nested = FindStringProperty(item, propertyName);
+                    if (nested != null) return nested;
+                }
+            }
+            return null;
+        }
+
+        private static void RemoveMutationPayloadProperties(
+            JToken token,
+            string propertyName,
+            string parentPath,
+            JArray omittedFields,
+            bool removeStructuredValues = false)
+        {
+            if (token is JObject obj)
+            {
+                foreach (var property in obj.Properties().ToList())
+                {
+                    string path = string.IsNullOrEmpty(parentPath) ? property.Name : parentPath + "." + property.Name;
+                    bool textValue = property.Value.Type == JTokenType.String;
+                    bool structuredValue = removeStructuredValues
+                        && (property.Value.Type == JTokenType.Object || property.Value.Type == JTokenType.Array);
+                    if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase)
+                        && (textValue || structuredValue)
+                        && ShouldOmitMutationText(
+                            obj,
+                            textValue ? property.Value.ToString() : property.Value.ToString(Formatting.None)))
+                    {
+                        AddOmittedMutationField(omittedFields, path);
+                        property.Remove();
+                        continue;
+                    }
+                    RemoveMutationPayloadProperties(property.Value, propertyName, path, omittedFields, removeStructuredValues);
+                }
+            }
+            else if (token is JArray array)
+            {
+                for (int i = 0; i < array.Count; i++)
+                    RemoveMutationPayloadProperties(array[i], propertyName, parentPath + "[" + i + "]", omittedFields, removeStructuredValues);
+            }
+        }
+
+        private static void CompactSuccessfulEditPatchResponse(JToken payload, JArray omittedFields)
+        {
+            if (GetMutationPayloadBytes(payload) <= MutationEditPatchResponseTargetBytes
+                || payload is not JObject root
+                || root["result"] is not JObject result)
+                return;
+
+            var reductionOrder = new (JObject parent, string name, string path)[]
+            {
+                (result, "snapshot", "result.snapshot"),
+                (result, "postSaveVerification", "result.postSaveVerification"),
+                (result, "verification", "result.verification"),
+                (root, "next_legal_actions", "next_legal_actions"),
+                (result, "timings", "result.timings"),
+                (result, "message", "result.message"),
+                (result, "result", "result.result"),
+                (result, "requestedHash", "result.requestedHash"),
+                (result, "normalizedRequestedHash", "result.normalizedRequestedHash"),
+                (result, "normalizedPersistedHash", "result.normalizedPersistedHash")
+            };
+
+            foreach (var field in reductionOrder)
+            {
+                RemoveMutationProperty(field.parent, field.name, field.path, omittedFields);
+                if (GetMutationPayloadBytes(payload) <= MutationEditPatchResponseTargetBytes)
+                    return;
+            }
+
+            CompactPersistedSnippet(result, omittedFields);
+            if (GetMutationPayloadBytes(payload) <= MutationEditPatchResponseTargetBytes)
+                return;
+
+            RemoveMutationProperty(result, "persistedSnippet", "result.persistedSnippet", omittedFields);
+        }
+
+        private static bool CompactPersistedSnippet(JObject result, JArray omittedFields)
+        {
+            const int contextLines = 5;
+            const int lineLimit = contextLines * 2 + 1;
+            JProperty? snippetProperty = result.Property("persistedSnippet");
+            if (snippetProperty?.Value.Type != JTokenType.String) return false;
+
+            string newline = ((char)10).ToString();
+            string carriageReturn = ((char)13).ToString();
+            string[] lines = snippetProperty.Value.ToString()
+                .Replace(carriageReturn + newline, newline)
+                .Replace(carriageReturn, newline)
+                .Split((char)10);
+            if (lines.Length <= lineLimit) return false;
+
+            int start = Math.Max(0, lines.Length / 2 - contextLines);
+            if (start + lineLimit > lines.Length)
+                start = Math.Max(0, lines.Length - lineLimit);
+
+            snippetProperty.Value = string.Join(newline, lines.Skip(start).Take(lineLimit));
+            result["persistedSnippetTruncated"] = true;
+            AddOmittedMutationField(omittedFields, "result.persistedSnippet");
+            return true;
+        }
+
+        private static void RemoveMutationProperty(JObject parent, string propertyName, string path, JArray omittedFields)
+        {
+            JProperty? property = parent.Properties().FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, propertyName, StringComparison.OrdinalIgnoreCase));
+            if (property == null) return;
+
+            AddOmittedMutationField(omittedFields, path);
+            property.Remove();
+        }
+
+        private static void AddOmittedMutationField(JArray omittedFields, string path)
+        {
+            if (!omittedFields.Any(field => string.Equals(field.ToString(), path, StringComparison.OrdinalIgnoreCase)))
+                omittedFields.Add(path);
+        }
+
+        private static int GetMutationPayloadBytes(JToken payload)
+            => Encoding.UTF8.GetByteCount(payload.ToString(Formatting.None));
+
+        private static bool ShouldOmitMutationText(JObject parent, string text)
+        {
+            bool hasPersistedReceipt = parent.Properties().Any(property =>
+                string.Equals(property.Name, "persistedHash", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(property.Name, "versionToken", StringComparison.OrdinalIgnoreCase));
+            return hasPersistedReceipt || Encoding.UTF8.GetByteCount(text) >= MutationTextMinimumOmitBytes;
+        }
+
+        private static void BoundMutationDiffs(JToken token)
+        {
+            if (token is JObject obj)
+            {
+                if (obj["diff"]?.Type == JTokenType.String)
+                {
+                    string diff = obj["diff"]!.ToString();
+                    string newline = ((char)10).ToString();
+                    string carriageReturn = ((char)13).ToString();
+                    string[] lines = diff.Replace(carriageReturn + newline, newline).Replace(carriageReturn, newline).Split((char)10);
+                    if (lines.Length > MutationDiffLineLimit || Encoding.UTF8.GetByteCount(diff) > MutationDiffByteLimit)
+                    {
+                        const string marker = "... diff truncated; use genexus_read for full context ...";
+                        var boundedLines = new List<string>();
+                        if (lines.Length >= MutationDiffLineLimit)
+                        {
+                            boundedLines.AddRange(lines.Take(19));
+                            boundedLines.Add(marker);
+                            boundedLines.AddRange(lines.Skip(lines.Length - 20));
+                        }
+                        else
+                        {
+                            boundedLines.AddRange(lines);
+                            boundedLines.Add(marker);
+                        }
+
+                        for (int i = 0; i < boundedLines.Count; i++)
+                            boundedLines[i] = TruncateUtf8(boundedLines[i], MutationDiffLineByteLimit);
+
+                        obj["diff"] = string.Join(newline, boundedLines);
+                        obj["diffTruncated"] = true;
+                    }
+                }
+
+                foreach (var property in obj.Properties().ToList())
+                    BoundMutationDiffs(property.Value);
+            }
+            else if (token is JArray array)
+            {
+                foreach (var item in array)
+                    BoundMutationDiffs(item);
+            }
+        }
+
+        private static string TruncateUtf8(string value, int maxBytes)
+        {
+            if (Encoding.UTF8.GetByteCount(value) <= maxBytes) return value;
+            var builder = new StringBuilder();
+            int bytes = 0;
+            foreach (var rune in value.EnumerateRunes())
+            {
+                if (bytes + rune.Utf8SequenceLength > maxBytes - 3) break;
+                builder.Append(rune.ToString());
+                bytes += rune.Utf8SequenceLength;
+            }
+            return builder.Append('…').ToString();
+        }
+
         // Items 54/55/56: resolve a "KB ref" argument that may be either an alias
         // declared in config.Environment.KBs[] or a literal filesystem path.
         // Returns the resolved absolute path, or null if neither match.
@@ -585,6 +894,20 @@ namespace GxMcp.Gateway
                     : AddKbContextMetadata(axiPayload, kbAlias!);
             }
 
+            var lateOmittedMutationFields = new JArray();
+            bool compactSuccessfulEditPatch = !isError
+                && !(toolArgs?["includePersistedText"]?.Value<bool?>() ?? false)
+                && string.Equals(toolName, "genexus_edit", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(toolArgs?["mode"]?.ToString(), "patch", StringComparison.OrdinalIgnoreCase)
+                && IsSuccessfulMutationPayload(axiPayload);
+            if (compactSuccessfulEditPatch
+                && GetMutationPayloadBytes(axiPayload) > MutationEditPatchResponseTargetBytes)
+            {
+                // Account for normalizer metadata and follow-up suggestions added after
+                // the worker payload was shaped; keep the final MCP text within budget.
+                CompactSuccessfulEditPatchResponse(axiPayload, lateOmittedMutationFields);
+            }
+
             var result = new JObject
             {
                 ["resultType"] = "complete",
@@ -601,6 +924,10 @@ namespace GxMcp.Gateway
             if (!string.IsNullOrWhiteSpace(kbAlias))
             {
                 result["_meta"] = new JObject { ["kbAlias"] = kbAlias };
+            }
+            if (lateOmittedMutationFields.Count > 0)
+            {
+                AttachOmittedFieldsMetadata(result, lateOmittedMutationFields);
             }
             // MCP's structuredContent lets modern clients consume the JSON result
             // without reparsing the text content. Keep the text representation for

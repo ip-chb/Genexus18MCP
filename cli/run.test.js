@@ -445,13 +445,28 @@ test('non-interactive init supports idempotent no-op', () => {
     assert.ok(Array.isArray(firstParsed.ok.verification.checks), 'verification should have checks array');
     assert.equal(firstParsed.meta.smokeSkipped, true, '--no-smoke should be reflected in meta');
 
+    const cfgPath = path.join(kbDir, 'config.json');
+    assert.equal(fs.existsSync(cfgPath), true);
+    const createdConfig = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    assert.equal(createdConfig.Server.ToolProfile, 'standard');
+
+    createdConfig.Server.ToolProfile = 'all';
+    const existingConfigBytes = JSON.stringify(createdConfig, null, 2);
+    fs.writeFileSync(cfgPath, existingConfigBytes);
+
     const second = runCli(args, { env: testGatewayEnv });
     assert.equal(second.status, 0);
     const secondParsed = JSON.parse(second.stdout);
     assert.equal(secondParsed.ok.noOp, true);
+    assert.equal(fs.readFileSync(cfgPath, 'utf8'), existingConfigBytes, 'init must not rewrite an existing profile');
 
-    const cfgPath = path.join(kbDir, 'config.json');
-    assert.equal(fs.existsSync(cfgPath), true);
+    delete createdConfig.Server.ToolProfile;
+    const profilelessConfigBytes = JSON.stringify(createdConfig, null, 2);
+    fs.writeFileSync(cfgPath, profilelessConfigBytes);
+    const third = runCli(args, { env: testGatewayEnv });
+    assert.equal(third.status, 0);
+    assert.equal(JSON.parse(third.stdout).ok.noOp, true);
+    assert.equal(fs.readFileSync(cfgPath, 'utf8'), profilelessConfigBytes, 'init must not retrofit profile-less configs');
 
     removeTempPath(tempRoot, { recursive: true, force: true });
 });

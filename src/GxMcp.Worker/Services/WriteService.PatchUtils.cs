@@ -398,7 +398,9 @@ namespace GxMcp.Worker.Services
                         : "The post-save state could not be read reliably. The SDK save result is reported separately.",
                     ["hint"] = "Do not retry automatically. Read the complete current state and its versionToken before deciding on another edit."
                 };
-                response["partialPersistenceDetected"] = known && before != null && !string.Equals(before, actual, StringComparison.Ordinal);
+                response["partialPersistenceDetected"] = known && before != null
+                    && !string.Equals(before, actual, StringComparison.Ordinal)
+                    && !string.Equals((requested ?? "").Replace("\r\n", "\n").Replace('\r', '\n'), (actual ?? "").Replace("\r\n", "\n").Replace('\r', '\n'), StringComparison.Ordinal);
             }
             if (!dryRun && successful && writeApplied && requireObjectSave && objectSaved != true)
             {
@@ -417,14 +419,22 @@ namespace GxMcp.Worker.Services
         private static JObject BuildPersistenceDiff(string expected, string actual, PersistedVerificationResult verification, bool known)
         {
             int line = 0;
+            bool eolOnly = string.Equals(
+                (expected ?? "").Replace("\r\n", "\n").Replace('\r', '\n'),
+                (actual ?? "").Replace("\r\n", "\n").Replace('\r', '\n'),
+                StringComparison.Ordinal);
+
             if (known && !string.Equals(expected, actual, StringComparison.Ordinal))
             {
-                string left = expected ?? "", right = actual ?? "";
-                int index = 0;
-                while (index < left.Length && index < right.Length && left[index] == right[index]) index++;
-                line = 1;
-                for (int i = 0; i < index; i++)
-                    if (left[i] == '\n' || (left[i] == '\r' && (i + 1 >= left.Length || left[i + 1] != '\n'))) line++;
+                if (!verification.Matches || !eolOnly)
+                {
+                    string left = expected ?? "", right = actual ?? "";
+                    int index = 0;
+                    while (index < left.Length && index < right.Length && left[index] == right[index]) index++;
+                    line = 1;
+                    for (int i = 0; i < index; i++)
+                        if (left[i] == '\n' || (left[i] == '\r' && (i + 1 >= left.Length || left[i + 1] != '\n'))) line++;
+                }
             }
             string[] expectedLines = (expected ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
             string[] actualLines = (actual ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
@@ -433,23 +443,24 @@ namespace GxMcp.Worker.Services
                 ? lines[line - 1].Substring(0, Math.Min(lines[line - 1].Length, 240)) : null;
             Func<string, string> ending = text =>
             {
-                if (!known || line == 0 || text == null) return null;
+                if (!known || text == null) return null;
                 int currentLine = 1;
+                int targetLine = line > 0 ? line : 1;
                 for (int i = 0; i < text.Length; i++)
                 {
                     if (text[i] != '\r' && text[i] != '\n') continue;
                     bool crlf = text[i] == '\r' && i + 1 < text.Length && text[i + 1] == '\n';
-                    if (currentLine++ == line) return crlf ? "CRLF" : text[i] == '\r' ? "CR" : "LF";
+                    if (currentLine++ == targetLine) return crlf ? "CRLF" : text[i] == '\r' ? "CR" : "LF";
                     if (crlf) i++;
                 }
-                return currentLine == line ? "none" : null;
+                return currentLine == targetLine ? "none" : null;
             };
             return new JObject
             {
                 ["matches"] = verification.Matches, ["reason"] = verification.Reason,
                 ["firstDifferentLine"] = known && line > 0 ? (JToken)line : JValue.CreateNull(),
-                ["expectedLine"] = known ? preview(expectedLines) : null,
-                ["readLine"] = known ? preview(actualLines) : null,
+                ["expectedLine"] = known && line > 0 ? preview(expectedLines) : null,
+                ["readLine"] = known && line > 0 ? preview(actualLines) : null,
                 ["expectedLineEnding"] = ending(expected),
                 ["readLineEnding"] = ending(actual),
                 ["linePreviewLimit"] = 240
@@ -634,37 +645,39 @@ namespace GxMcp.Worker.Services
             {
                 return new PersistedVerificationResult { State = "verified", Reason = "none", Matches = true };
             }
-            if (verifyMode != null)
+            string mode = verifyMode != null ? verifyMode : TextPersistenceVerifier.ResolveMode(null, partName);
+            bool exact = string.Equals(mode, "exact", StringComparison.OrdinalIgnoreCase);
+
+            bool eolOnly = string.Equals(
+                (requested ?? "").Replace("\r\n", "\n").Replace('\r', '\n'),
+                (persisted ?? "").Replace("\r\n", "\n").Replace('\r', '\n'),
+                StringComparison.Ordinal);
+
+            if (eolOnly)
             {
-                bool exact = string.Equals(verifyMode, "exact", StringComparison.OrdinalIgnoreCase);
-                bool matches = !exact && (TextPersistenceVerifier.Evaluate(requested, persisted, verifyMode, partName).Matches
-                    || WhitespaceInsensitiveEquals(persisted, requested)
-                    || XmlEquivalentWhenApplicable(persisted, requested));
-                string reason = string.Equals((requested ?? "").Replace("\r\n", "\n").Replace('\r', '\n'),
-                    (persisted ?? "").Replace("\r\n", "\n").Replace('\r', '\n'), StringComparison.Ordinal)
-                    ? "lineEndings" : ModuleQualificationEquals(persisted, requested) ? "moduleQualification"
-                    : matches ? "normalization" : "contentMismatch";
-                return new PersistedVerificationResult { State = matches ? "verified" : "mismatch", Reason = reason, Matches = matches };
-            }
-            if (WhitespaceInsensitiveEquals(persisted, requested)
-                || XmlEquivalentWhenApplicable(persisted, requested))
-            {
-                // issue #78: distinguish SDK module-qualification ("For Each Foo" →
-                // "For Each MyModule.Foo") from ordinary formatting/casing normalization so
-                // the mutation.diff.reason tells the agent exactly what was rewritten.
+                if (!exact)
+                {
+                    return new PersistedVerificationResult
+                    {
+                        State = "verified",
+                        Reason = "normalization",
+                        Matches = true
+                    };
+                }
                 return new PersistedVerificationResult
                 {
-                    State = "verified",
-                    Reason = ModuleQualificationEquals(persisted, requested) ? "moduleQualification" : "normalization",
-                    Matches = true
+                    State = "mismatch",
+                    Reason = "lineEndings",
+                    Matches = false
                 };
             }
-            return new PersistedVerificationResult
-            {
-                State = "mismatch",
-                Reason = "contentMismatch",
-                Matches = false
-            };
+
+            bool matches = !exact && (TextPersistenceVerifier.Evaluate(requested, persisted, mode, partName).Matches
+                || WhitespaceInsensitiveEquals(persisted, requested)
+                || XmlEquivalentWhenApplicable(persisted, requested));
+            string reason = ModuleQualificationEquals(persisted, requested) ? "moduleQualification"
+                : matches ? "normalization" : "contentMismatch";
+            return new PersistedVerificationResult { State = matches ? "verified" : "mismatch", Reason = reason, Matches = matches };
         }
 
         private static bool XmlEquivalentWhenApplicable(string a, string b)

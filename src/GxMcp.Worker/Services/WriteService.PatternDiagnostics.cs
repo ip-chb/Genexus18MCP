@@ -2524,7 +2524,7 @@ namespace GxMcp.Worker.Services
                 return configuredDirectory;
             }
 
-            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".tmp");
+            return RuntimePaths.TempRoot;
         }
     }
 }

@@ -917,7 +917,7 @@ namespace GxMcp.Gateway
                     {
                         try
                         {
-                            var req = JObject.Parse(replayLine);
+                            var req = GxMcp.Common.JsonIngress.ParseObject(replayLine);
                             var resp = await ProcessMcpRequest(req);
                             if (resp != null && !IsJsonRpcNotification(req))
                                 await TryWriteStdout(resp);
@@ -969,7 +969,7 @@ namespace GxMcp.Gateway
                             JObject request;
                             try
                             {
-                                request = JObject.Parse(capturedLine);
+                                request = GxMcp.Common.JsonIngress.ParseObject(capturedLine);
                             }
                             catch (Exception parseEx)
                             {
@@ -1092,7 +1092,7 @@ namespace GxMcp.Gateway
                     try
                     {
                         string body = line;
-                        var request = JObject.Parse(body);
+                        var request = GxMcp.Common.JsonIngress.ParseObject(body);
                         string requestId = request["id"]?.ToString() ?? "unknown";
                         bool isInitialize = string.Equals(request["method"]?.ToString(), "initialize", StringComparison.Ordinal);
                         bool isModern = McpRouter.IsModernRequest(request);
@@ -1238,7 +1238,7 @@ namespace GxMcp.Gateway
                             {
                                 try
                                 {
-                                    var jsonError = JObject.Parse(remoteError ?? string.Empty);
+                                    var jsonError = GxMcp.Common.JsonIngress.ParseObject(remoteError ?? string.Empty);
                                     if (jsonError["jsonrpc"] != null && jsonError["error"] != null)
                                     {
                                         await TryWriteStdout(jsonError.ToString(Formatting.None));
@@ -1312,7 +1312,7 @@ namespace GxMcp.Gateway
         {
             try
             {
-                var request = JObject.Parse(initializeLine ?? string.Empty);
+                var request = GxMcp.Common.JsonIngress.ParseObject(initializeLine ?? string.Empty);
                 return McpRouter.NegotiateProtocolVersion(McpHttpProtocol.GetRequestProtocolVersion(request));
             }
             catch

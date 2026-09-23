@@ -187,6 +187,133 @@ namespace GxMcp.Worker.Services
             }
         }
 
+        public string GetPropertiesBatch(
+            JArray targets,
+            string controlName = null,
+            string typeFilter = null,
+            string propertyName = null,
+            IEnumerable<string> propertyNames = null,
+            string projection = null,
+            string query = null)
+        {
+            return ShapeGetPropertiesBatchResult(
+                targets,
+                (name, itemType) => GetProperties(
+                    name,
+                    controlName,
+                    string.IsNullOrWhiteSpace(itemType) ? typeFilter : itemType,
+                    propertyName,
+                    propertyNames,
+                    projection,
+                    query));
+        }
+
+        internal static string ShapeGetPropertiesBatchResult(
+            JArray targets,
+            Func<string, string, string> getProperties,
+            int maxTargets = 100)
+        {
+            if (targets == null || targets.Count == 0)
+                return Models.McpResponse.Err(
+                    code: "InvalidBatchTargets",
+                    message: "Pass a non-empty targets array.",
+                    hint: "Use action=get with targets containing objects of {name, type?}.");
+            if (maxTargets < 1)
+                return Models.McpResponse.Err(
+                    code: "InvalidBatchLimit",
+                    message: "The batch target limit must be greater than zero.");
+
+            int processedCount = Math.Min(targets.Count, maxTargets);
+            int errorCount = 0;
+            var results = new JArray();
+            for (int index = 0; index < processedCount; index++)
+            {
+                JObject item = new JObject { ["index"] = index };
+                if (targets[index] is not JObject target || string.IsNullOrWhiteSpace(target["name"]?.ToString()))
+                {
+                    item["status"] = "error";
+                    item["error"] = new JObject
+                    {
+                        ["code"] = "InvalidTarget",
+                        ["message"] = "Each target must be an object with a non-empty name."
+                    };
+                    results.Add(item);
+                    errorCount++;
+                    continue;
+                }
+
+                string name = target["name"].ToString().Trim();
+                string type = target["type"]?.ToString();
+                item["name"] = name;
+                if (!string.IsNullOrWhiteSpace(type)) item["type"] = type;
+
+                JObject response;
+                try
+                {
+                    response = JObject.Parse(getProperties(name, type));
+                }
+                catch
+                {
+                    item["status"] = "error";
+                    item["error"] = new JObject
+                    {
+                        ["code"] = "InvalidWorkerResponse",
+                        ["message"] = "The property read returned an invalid response."
+                    };
+                    results.Add(item);
+                    errorCount++;
+                    continue;
+                }
+
+                if (string.Equals(response["status"]?.ToString(), "ok", StringComparison.OrdinalIgnoreCase) &&
+                    response["result"] is JObject result)
+                {
+                    item["status"] = "ok";
+                    if (result["values"] is JObject values) item["values"] = values.DeepClone();
+                    if (result["missingProperties"] is JArray missing) item["missingProperties"] = missing.DeepClone();
+                    if (result["versionToken"] != null) item["versionToken"] = result["versionToken"].DeepClone();
+                    results.Add(item);
+                    continue;
+                }
+
+                JObject responseError = response["error"] as JObject;
+                string errorMessage = responseError?["message"]?.ToString()
+                    ?? response["message"]?.ToString()
+                    ?? response["error"]?.ToString()
+                    ?? "Property read failed.";
+                JObject error = responseError != null ? (JObject)responseError.DeepClone() : new JObject();
+                if (error["code"] == null)
+                    error["code"] = response["code"]?.ToString() ?? "PropertiesReadFailed";
+                if (error["message"] == null) error["message"] = errorMessage;
+                item["status"] = "error";
+                item["error"] = error;
+                results.Add(item);
+                errorCount++;
+            }
+
+            bool truncated = targets.Count > processedCount;
+            var resultEnvelope = new JObject
+            {
+                ["requestedCount"] = targets.Count,
+                ["processedCount"] = processedCount,
+                ["errorCount"] = errorCount,
+                ["truncated"] = truncated,
+                ["results"] = results
+            };
+
+            if (errorCount == 0 && !truncated)
+                return Models.McpResponse.Ok(code: "PropertiesBatchRead", result: resultEnvelope);
+
+            var warnings = new JArray();
+            if (errorCount > 0) warnings.Add($"{errorCount} target(s) failed; see results[].error.");
+            if (truncated) warnings.Add($"Only the first {processedCount} of {targets.Count} targets were read.");
+            return Models.McpResponse.Partial(
+                target: null,
+                code: "PropertiesBatchRead",
+                result: resultEnvelope,
+                warnings: warnings);
+        }
+
         internal static int Levenshtein(string a, string b)
         {
             if (string.IsNullOrEmpty(a)) return b?.Length ?? 0;

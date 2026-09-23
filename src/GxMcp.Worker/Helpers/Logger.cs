@@ -28,23 +28,16 @@ namespace GxMcp.Worker.Helpers
         {
             try
             {
-                var env = Environment.GetEnvironmentVariable("GXMCP_LOG_DIR");
-                if (!string.IsNullOrWhiteSpace(env))
-                {
-                    Directory.CreateDirectory(env);
-                    return env;
-                }
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory ?? "";
-                if (baseDir.Replace('/', '\\').IndexOf("\\node_modules\\", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                    string dir = Path.Combine(local, "GenexusMCP", "logs");
-                    Directory.CreateDirectory(dir);
-                    return dir;
-                }
-                return baseDir;
+                string directory = RuntimePaths.LogsRoot;
+                Directory.CreateDirectory(directory);
+                return directory;
             }
-            catch { return AppDomain.CurrentDomain.BaseDirectory ?? ""; }
+            catch
+            {
+                string fallback = Path.Combine(Path.GetTempPath(), "GenexusMCP", "logs");
+                Directory.CreateDirectory(fallback);
+                return fallback;
+            }
         }
         private static readonly BlockingCollection<string> _queue = new BlockingCollection<string>();
         private static readonly Thread _writer;
@@ -76,9 +69,7 @@ namespace GxMcp.Worker.Helpers
                 {
                     if (File.Exists(LogFile))
                     {
-                        string prevLog = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "worker_debug.prev.log");
-                        if (File.Exists(prevLog)) File.Delete(prevLog);
-                        File.Move(LogFile, prevLog);
+                        RotateExistingLog(LogFile);
                         break;
                     }
                 }
@@ -98,6 +89,15 @@ namespace GxMcp.Worker.Helpers
 
             // Ensure pending lines flush on process exit (best-effort; daemon thread).
             try { AppDomain.CurrentDomain.ProcessExit += (_, __) => Shutdown(); } catch { }
+        }
+
+        internal static void RotateExistingLog(string logFile)
+        {
+            if (string.IsNullOrWhiteSpace(logFile) || !File.Exists(logFile)) return;
+            string directory = Path.GetDirectoryName(logFile) ?? RuntimePaths.LogsRoot;
+            string previousLog = Path.Combine(directory, "worker_debug.prev.log");
+            if (File.Exists(previousLog)) File.Delete(previousLog);
+            File.Move(logFile, previousLog);
         }
 
         public static void Info(string message)  => Enqueue("INFO",  message);

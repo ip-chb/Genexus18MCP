@@ -205,6 +205,25 @@ namespace GxMcp.Gateway.Tests
             Assert.Contains("sessions", recovery.Invalidation);
         }
 
+        [Theory]
+        [InlineData("genexus_connection_recover", "recover")]
+        [InlineData("genexus_worker_reload", null)]
+        public void GatewayProcessMutationsExposeTheirCompletePolicy(string toolName, string? action)
+        {
+            var args = new JObject();
+            if (action != null) args["action"] = action;
+
+            var contract = OperationClassifier.Describe(toolName, args);
+
+            Assert.Equal(OperationClassifier.OperationKind.Mutating, contract.Kind);
+            Assert.Equal("process.write", contract.Effects);
+            Assert.Equal("gateway", contract.Execution);
+            Assert.Equal("operation_key", contract.Retry);
+            Assert.Equal("never", contract.Cache);
+            Assert.Equal(new[] { "process", "sessions" }, contract.Invalidation);
+            Assert.False(contract.PreviewSupported);
+        }
+
         [Fact]
         public void ActionToolsRequireAnExplicitAction()
         {

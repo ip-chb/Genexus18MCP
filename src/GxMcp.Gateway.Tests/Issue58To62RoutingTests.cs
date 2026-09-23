@@ -64,11 +64,12 @@ namespace GxMcp.Gateway.Tests
             var routed = JObject.FromObject(new OperationsRouter().ConvertToolCall("genexus_variable", new JObject
             {
                 ["action"] = "modify", ["name"] = "P", ["varName"] = "&Value",
-                ["newTypeName"] = "Character(40)", ["dataType"] = "Numeric"
+                ["newTypeName"] = JValue.CreateNull(), ["typeName"] = "Character(40)", ["dataType"] = "Numeric"
             })!);
 
             Assert.Equal("ModifyVariable", routed["action"]?.ToString());
-            Assert.Equal("Character(40)", routed["newTypeName"]?.ToString());
+            Assert.Equal(JTokenType.Null, routed["newTypeName"]?.Type);
+            Assert.Equal("Character(40)", routed["typeName"]?.ToString());
             Assert.Equal("Numeric", routed["dataType"]?.ToString());
         }
 

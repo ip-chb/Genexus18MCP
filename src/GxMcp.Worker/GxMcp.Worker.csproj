@@ -159,6 +159,7 @@
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="8.0.3" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <Compile Include="..\GxMcp.Shared\JsonIngress.cs" Link="Shared\JsonIngress.cs" />
   </ItemGroup>
 
   <ItemGroup>

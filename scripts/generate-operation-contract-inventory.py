@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -20,6 +21,7 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[1]
 CLASSIFIER = ROOT / "src" / "GxMcp.Gateway" / "OperationClassifier.cs"
 TOOLS = ROOT / "src" / "GxMcp.Gateway" / "tool_definitions.json"
+OUTPUT = ROOT / "docs" / "operation-contract-inventory.json"
 
 
 def _strings(value: str) -> list[str]:
@@ -37,7 +39,7 @@ def _set_block(source: str, field: str) -> set[str]:
     return set(_strings(match.group(1)))
 
 
-def read_policy(path: Path) -> tuple[dict[str, dict[str, set[str]]], dict[str, set[str]]]:
+def read_policy(path: Path) -> tuple[dict[str, dict[str, set[str]]], dict[str, set[str]], set[str]]:
     source = path.read_text(encoding="utf-8")
     contracts: dict[str, dict[str, set[str]]] = {}
     marker = "private static readonly Dictionary<string, ActionContract> ActionContracts"
@@ -66,7 +68,14 @@ def read_policy(path: Path) -> tuple[dict[str, dict[str, set[str]]], dict[str, s
             "NameOnlyMutatingTools",
         )
     }
-    return contracts, named
+    preview_match = re.search(
+        r"private static readonly HashSet<string> DryRunCapableActions.*?\{(.*?)\n        \};",
+        source,
+        re.S,
+    )
+    if not preview_match:
+        raise ValueError("could not locate DryRunCapableActions in OperationClassifier.cs")
+    return contracts, named, set(_strings(preview_match.group(1)))
 
 
 def classify(tool: str, action: str | None, contracts: dict[str, dict[str, set[str]]], named: dict[str, set[str]]) -> str:
@@ -111,9 +120,50 @@ def effect_for(kind: str, tool: str) -> str:
     return "unknown"
 
 
+def operation_fields(tool: str, action: str | None, kind: str, preview_actions: set[str]) -> dict:
+    preview_supported = bool(action and f"{tool}:{action}" in preview_actions)
+    if tool == "genexus_connection_recover" and action == "journal_status":
+        return {
+            "kind": "readOnly", "effects": "file.read", "execution": "gateway",
+            "retry": "safe", "cache": "never", "invalidation": [], "previewSupported": False,
+        }
+    if tool == "genexus_connection_recover" and action == "journal_repair":
+        preview = {
+            "kind": "readOnly", "effects": "file.read", "execution": "gateway",
+            "retry": "safe", "cache": "never", "invalidation": [], "previewSupported": True,
+        }
+        applied = {
+            "kind": "mutating", "effects": "file.write", "execution": "gateway",
+            "retry": "operation_key", "cache": "never", "invalidation": ["files"],
+            "previewSupported": True,
+        }
+        return {
+            **preview,
+            "variants": [
+                {"selector": {"dryRun": "not false"}, **preview},
+                {"selector": {"dryRun": False}, **applied},
+            ],
+        }
+    if tool in {"genexus_connection_recover", "genexus_worker_reload"}:
+        return {
+            "kind": kind, "effects": "process.write", "execution": "gateway",
+            "retry": "operation_key", "cache": "never", "invalidation": ["process", "sessions"],
+            "previewSupported": preview_supported,
+        }
+    return {
+        "kind": kind,
+        "effects": effect_for(kind, tool),
+        "execution": "worker" if kind in {"readOnly", "mutating"} else "unknown",
+        "retry": "safe" if kind == "readOnly" else ("operation_key" if kind == "mutating" else "never"),
+        "cache": "semantic" if kind == "readOnly" else "never",
+        "invalidation": [] if kind != "mutating" else ["kb", "dependents", "collections"],
+        "previewSupported": preview_supported,
+    }
+
+
 def build_inventory(tools_path: Path = TOOLS, classifier_path: Path = CLASSIFIER) -> dict:
     tools = json.loads(tools_path.read_text(encoding="utf-8"))
-    contracts, named = read_policy(classifier_path)
+    contracts, named, preview_actions = read_policy(classifier_path)
     entries: list[dict] = []
     errors: list[str] = []
     for definition in tools:
@@ -131,28 +181,12 @@ def build_inventory(tools_path: Path = TOOLS, classifier_path: Path = CLASSIFIER
                 kind = classify(tool, action, contracts, named)
                 if kind == "unknown":
                     errors.append(f"{tool}:{action}")
-                rows.append({
-                    "action": action,
-                    "kind": kind,
-                    "effects": effect_for(kind, tool),
-                    "execution": "worker" if kind in {"readOnly", "mutating"} else "unknown",
-                    "retry": "safe" if kind == "readOnly" else ("operation_key" if kind == "mutating" else "never"),
-                    "cache": "semantic" if kind == "readOnly" else "never",
-                    "invalidation": [] if kind != "mutating" else ["kb", "dependents", "collections"],
-                })
+                rows.append({"action": action, **operation_fields(tool, action, kind, preview_actions)})
         else:
             kind = classify(tool, None, contracts, named)
             if kind == "unknown":
                 errors.append(tool)
-            rows.append({
-                "action": None,
-                "kind": kind,
-                "effects": effect_for(kind, tool),
-                "execution": "worker" if kind in {"readOnly", "mutating"} else "unknown",
-                "retry": "safe" if kind == "readOnly" else ("operation_key" if kind == "mutating" else "never"),
-                "cache": "semantic" if kind == "readOnly" else "never",
-                "invalidation": [] if kind != "mutating" else ["kb", "dependents", "collections"],
-            })
+            rows.append({"action": None, **operation_fields(tool, None, kind, preview_actions)})
         entries.append({
             "tool": tool,
             "router": router_for(tool),
@@ -163,6 +197,8 @@ def build_inventory(tools_path: Path = TOOLS, classifier_path: Path = CLASSIFIER
     if errors:
         raise ValueError("unclassified published operations: " + ", ".join(sorted(errors)))
     return {
+        # Keep v1: `variants` is an additive field and each action retains its
+        # original top-level selector-default contract for existing readers.
         "schemaVersion": "genexus-operation-inventory/1",
         "source": [str(tools_path.relative_to(ROOT)).replace("\\", "/"), str(classifier_path.relative_to(ROOT)).replace("\\", "/")],
         "toolCount": len(entries),
@@ -171,13 +207,41 @@ def build_inventory(tools_path: Path = TOOLS, classifier_path: Path = CLASSIFIER
     }
 
 
+def verify_classifier_policy() -> None:
+    """Cross-check the issue-scoped variants against OperationClassifier.Describe."""
+    project = ROOT / "src" / "GxMcp.Gateway.Tests" / "GxMcp.Gateway.Tests.csproj"
+    command = [
+        "dotnet", "test", str(project), "--no-restore",
+        "--filter", "FullyQualifiedName~OperationInventoryClassifierParityTests",
+        "--logger", "console;verbosity=minimal",
+    ]
+    try:
+        result = subprocess.run(
+            command, cwd=ROOT, capture_output=True, text=True, check=False, timeout=60
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("OperationClassifier parity test timed out after 60 seconds") from exc
+    if result.returncode != 0:
+        output = (result.stdout or "") + (result.stderr or "")
+        raise ValueError("OperationClassifier parity test failed:\n" + output[-4000:])
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="write the deterministic inventory JSON")
-    parser.add_argument("--check", action="store_true", help="validate only; do not write")
+    parser.add_argument("--check", action="store_true", help="compare the generated inventory with the published artifact")
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:
         inventory = build_inventory()
+        output_path = args.output or OUTPUT
+        if args.check:
+            published = json.loads(output_path.read_text(encoding="utf-8"))
+            if published != inventory:
+                raise ValueError(f"published inventory differs from generated policy: {output_path}")
+            # The Python projection has issue-scoped special variants; validate those
+            # against the executable C# policy too. A generic C#-driven projection
+            # remains a separate follow-up rather than silently widening this gate.
+            verify_classifier_policy()
         if args.output and not args.check:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(json.dumps(inventory, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

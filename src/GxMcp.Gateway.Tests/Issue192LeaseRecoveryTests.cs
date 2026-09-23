@@ -193,6 +193,42 @@ namespace GxMcp.Gateway.Tests
             }
         }
 
+        [Fact]
+        public async Task KbAliasExplicitCall_RenewsLease_AndAutoRecoversAfterExpiry()
+        {
+            using var fixture = RouteFixture.Create();
+            fixture.UseFakeWorker(ready: true);
+            fixture.RegisterKnown("orders", "C:/KB/Orders");
+            string session = "issue303-kbalias-" + Guid.NewGuid().ToString("N");
+            Program.SetSessionSelectedKb(session, "orders", "C:/KB/Orders");
+
+            try
+            {
+                Assert.True(Program.TryGetSessionSnapshotForTest(session, out var before));
+                string expiredToken = before!.Lease!.Token;
+                ExpireLease(expiredToken);
+
+                // With kbAlias explicit on a stateful call, gateway auto-recovers lease instead of failing with KB_LEASE_EXPIRED
+                var recoverResponse = await CallToolAsync(session, "genexus_connection_recover", new JObject
+                {
+                    ["force"] = true,
+                    ["kbAlias"] = "orders"
+                });
+                var recoverPayload = ExtractPayload(recoverResponse);
+                Assert.False(recoverResponse["result"]?["isError"]?.Value<bool>());
+                Assert.Equal("Recovered", recoverPayload["status"]?.ToString());
+
+                Assert.True(Program.TryGetSessionSnapshotForTest(session, out var after));
+                Assert.NotEqual(expiredToken, after!.Lease!.Token);
+                Assert.True(after.ContextGeneration > before.ContextGeneration);
+                Assert.Equal("active", Program.GetSessionLeaseState(session));
+            }
+            finally
+            {
+                Program.ClearSessionSelectedKb(session);
+            }
+        }
+
         private static async Task<JObject> CallToolAsync(string session, string name, JObject arguments)
         {
             return (await Program.ProcessMcpRequest(new JObject

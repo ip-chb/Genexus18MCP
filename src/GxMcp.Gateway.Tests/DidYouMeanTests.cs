@@ -50,5 +50,13 @@ namespace GxMcp.Gateway.Tests
             Assert.DoesNotContain("Did you mean", msg);
             Assert.Contains("Allowed:", msg);
         }
+
+        [Fact]
+        public void Suggest_MatchesStemAndSynonyms()
+        {
+            var candidates = new[] { "pattern", "objectName", "maxResults", "timeoutMs" };
+            Assert.Equal("objectName", DidYouMean.Suggest("objects", candidates));
+            Assert.Equal("maxResults", DidYouMean.Suggest("limit", candidates));
+        }
     }
 }

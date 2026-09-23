@@ -25,10 +25,9 @@ namespace GxMcp.Worker.Helpers
                 if (s_logPath != null) return s_logPath;
                 try
                 {
-                    string baseDir = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-                    s_logPath = Path.Combine(baseDir, "webform-sdk-probe.log");
+                    s_logPath = Path.Combine(Logger.LogDirectory, "webform-sdk-probe.log");
                 }
-                catch { s_logPath = "webform-sdk-probe.log"; }
+                catch { s_logPath = Path.Combine(Path.GetTempPath(), "GenexusMCP", "logs", "webform-sdk-probe.log"); }
                 return s_logPath;
             }
         }

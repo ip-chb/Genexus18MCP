@@ -89,6 +89,56 @@ namespace GxMcp.Gateway.Tests
         }
 
         [Fact]
+        public void ExactIdentityReadsDoNotWaitForTheSearchIndex()
+        {
+            Assert.False(Program.IsIndexDependentToolForTest("genexus_read", new JObject
+            {
+                ["name"] = "Customer",
+                ["type"] = "Procedure"
+            }));
+            Assert.False(Program.IsIndexDependentToolForTest("genexus_read", new JObject
+            {
+                ["name"] = "Customer"
+            }));
+            Assert.False(Program.IsIndexDependentToolForTest("genexus_search_source", new JObject
+            {
+                ["objectName"] = "Customer"
+            }));
+            Assert.True(Program.IsIndexDependentToolForTest("genexus_search_source", new JObject
+            {
+                ["query"] = "Customer"
+            }));
+        }
+
+        [Theory]
+        [InlineData("genexus_inspect", "{'name':'Customer','type':'Procedure'}", false)]
+        [InlineData("genexus_inspect", "{'guid':'11111111-1111-1111-1111-111111111111'}", false)]
+        [InlineData("genexus_inspect", "{'include':['callers']}", true)]
+        [InlineData("genexus_navigation", "{'action':'view','name':'Customer'}", false)]
+        [InlineData("genexus_search_source", "{'guid':'11111111-1111-1111-1111-111111111111','pattern':'x'}", true)]
+        [InlineData("genexus_read", "{'target':'Customer'}", true)]
+        [InlineData("genexus_query", "{'name':'Customer'}", true)]
+        public void IdentityBoundReadsBypassButIndexBackedReadsRemainGated(
+            string toolName, string rawArgs, bool expectedGate)
+        {
+            Assert.Equal(expectedGate,
+                Program.IsIndexDependentToolForTest(toolName, JObject.Parse(rawArgs)));
+        }
+
+        [Fact]
+        public void ExactReadMetadataReportsLastKnownIndexUntilItIsCurrent()
+        {
+            JObject metadata = Program.BuildExactReadIndexMetadataForTest(
+                status: "Ready", freshness: "stale", etaMs: 12000)!;
+
+            Assert.Equal("Ready", metadata["status"]?.ToString());
+            Assert.Equal("stale", metadata["freshness"]?.ToString());
+            Assert.Equal(12000, metadata["etaMs"]?.ToObject<int>());
+            Assert.Null(Program.BuildExactReadIndexMetadataForTest(
+                status: "Ready", freshness: "current", etaMs: null));
+        }
+
+        [Fact]
         public void LegacyIndexAliasesRemainGatedAfterRewrite()
         {
             foreach (var legacy in new[]
@@ -138,6 +188,7 @@ namespace GxMcp.Gateway.Tests
             // No ETA yet: the fallback still tells the caller how long to back off.
             Assert.Equal(Program.DefaultIndexRetryAfterMs, warmStart["retryAfterMs"]?.ToObject<int>());
             Assert.Contains("freshness=current", warmStart["hint"]?.ToString());
+            Assert.Contains("Exact reads", warmStart["hint"]?.ToString());
             Assert.False(warmStart.ContainsKey("etaMs"));
         }
 

@@ -446,7 +446,7 @@ namespace GxMcp.Worker.Services
         public bool IsThreadSafe(string line)
         {
             JObject request;
-            try { request = JObject.Parse(line); }
+            try { request = GxMcp.Common.JsonIngress.ParseObject(line); }
             catch { return false; }
             return IsThreadSafe(request);
         }
@@ -525,7 +525,7 @@ namespace GxMcp.Worker.Services
         public string Dispatch(string line)
         {
             JObject req0;
-            try { req0 = JObject.Parse(line); }
+            try { req0 = GxMcp.Common.JsonIngress.ParseObject(line); }
             catch { req0 = null; }
 
             if (req0 == null)
@@ -667,7 +667,7 @@ namespace GxMcp.Worker.Services
         {
             try
             {
-                return DispatchInternal(JObject.Parse(line));
+                return DispatchInternal(GxMcp.Common.JsonIngress.ParseObject(line));
             }
             catch (Exception ex)
             {
@@ -1949,15 +1949,15 @@ namespace GxMcp.Worker.Services
                 var modResp = _writeService.ModifyVariable(
                     target,
                     args?["varName"]?.ToString(),
-                    args?["newTypeName"]?.ToString()
-                        ?? args?["typeName"]?.ToString()
-                        ?? args?["dataType"]?.ToString(),
-                    args?["basedOn"]?.ToString(),
+                    args?["newTypeName"]?.ToObject<string>()
+                        ?? args?["typeName"]?.ToObject<string>()
+                        ?? args?["dataType"]?.ToObject<string>(),
+                    args?["basedOn"]?.ToObject<string>(),
                     varDryRun,
                     args?["length"]?.ToObject<int?>(),
                     args?["decimals"]?.ToObject<int?>(),
                     args?["collection"]?.ToObject<bool?>(),
-                    args?["basedOnAttribute"]?.ToString());
+                    args?["basedOnAttribute"]?.ToObject<string>());
                 return _saveSpecifyOrchestrator.MaybeValidateAfterWrite(modResp, target, args, "Variables");
             }
             if (action == "ValidatePayload")
@@ -2568,6 +2568,52 @@ namespace GxMcp.Worker.Services
         private string Handle_Property(JObject request, string method, string action, string target, string payload, JObject args)
         {
             var propType = args?["type"]?.ToString();
+            if (args?["targets"] != null)
+            {
+                if (!string.Equals(action, "Get", StringComparison.OrdinalIgnoreCase) ||
+                    !string.IsNullOrWhiteSpace(args?["name"]?.ToString()) ||
+                    args["targets"] is not JArray batchTargets)
+                {
+                    return Models.McpResponse.Err(
+                        code: "InvalidBatchTargets",
+                        message: "targets is supported only for action=get and cannot be combined with name.",
+                        hint: "Pass either name for a single-object read or targets: [{name, type?}] for a batch.",
+                        target: target);
+                }
+
+                List<string> batchPropertyNames = null;
+                string batchPropertyName = null;
+                if (args["propertyNames"] is JArray batchNames)
+                    batchPropertyNames = batchNames.Select(t => t?.ToString()).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+                else if (args["propertyName"] is JArray batchNameArray)
+                    batchPropertyNames = batchNameArray.Select(t => t?.ToString()).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+                else if (args["properties"] is JArray batchProperties)
+                    batchPropertyNames = batchProperties.Select(t => t?.ToString()).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+                else
+                {
+                    batchPropertyName = args["propertyName"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(batchPropertyName) && args["properties"]?.Type == JTokenType.String)
+                        batchPropertyName = args["properties"].ToString();
+                }
+
+                return _propertyService.GetPropertiesBatch(
+                    batchTargets,
+                    args["control"]?.ToString(),
+                    propType,
+                    batchPropertyName,
+                    batchPropertyNames,
+                    args["projection"]?.ToString(),
+                    args["query"]?.ToString());
+            }
+
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                return Models.McpResponse.Err(
+                    code: "MissingTarget",
+                    message: "name is required for a single-object properties operation.",
+                    hint: "Pass name, or use action=get with targets: [{name, type?}] for a batch.");
+            }
+
             if (string.Equals(action, "Move", StringComparison.OrdinalIgnoreCase))
             {
                 // NOTE: args["module"] is the routing key ("Property"), NOT a destination —
@@ -3324,7 +3370,7 @@ namespace GxMcp.Worker.Services
                         {
                             ["name"] = name,
                             ["type"] = type,
-                            ["content"] = JToken.Parse(content)
+                            ["content"] = GxMcp.Common.JsonIngress.ParseToken(content)
                         });
                     }
                     catch { /* skip objects that fail to read */ }

@@ -338,5 +338,23 @@ namespace GxMcp.Gateway.Tests
             Assert.NotNull(nextSteps);
             Assert.Contains(nextSteps!.OfType<JObject>(), s => s["tool"]?.ToString() == "genexus_orient");
         }
+
+        [Fact]
+        public void Validate_Issue302_SearchSourceUnknownArg_FailsWithSuggestion()
+        {
+            GatewayArgsValidator.ClearCache();
+            var result = GatewayArgsValidator.Validate("genexus_search_source", new JObject
+            {
+                ["pattern"] = "&trace",
+                ["objects"] = "pTarifaLoggi,pAPIPrazo",
+                ["limit"] = 120,
+                ["kbAlias"] = "MC30"
+            });
+
+            Assert.False(result.Ok);
+            Assert.Contains(result.Violations, v => v.Path == "objects" && v.Suggestion == "objectName");
+            Assert.Contains(result.Violations, v => v.Path == "limit" && v.Suggestion == "maxResults");
+            Assert.DoesNotContain(result.Violations, v => v.Path == "kbAlias");
+        }
     }
 }

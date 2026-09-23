@@ -56,6 +56,7 @@ namespace GxMcp.Worker.Services
         private readonly KbService _kbService;
         private readonly ObjectService _objectService;
         private readonly IndexCacheService _indexCacheService;
+        private readonly Func<string, string, string> _callerSourceReader;
 
         private readonly UIService _uiService;
         private readonly NavigationService _navigationService;
@@ -79,10 +80,17 @@ namespace GxMcp.Worker.Services
 
         // Test-friendly ctor matching the plan signature.
         public AnalyzeService(IndexCacheService index, ObjectService objSvc, CallerGraphService graph)
+            : this(index, objSvc, graph, null)
+        {
+        }
+
+        internal AnalyzeService(IndexCacheService index, ObjectService objSvc, CallerGraphService graph,
+            Func<string, string, string> callerSourceReader)
         {
             _indexCacheService = index;
             _objectService = objSvc;
             _graph = graph ?? new CallerGraphService(index);
+            _callerSourceReader = callerSourceReader;
         }
 
         public string Analyze(string target, string typeFilter = null)
@@ -2385,16 +2393,16 @@ namespace GxMcp.Worker.Services
         // Enumerates every caller from the index and scans their source for
         // actual call sites, returning line number + 3-line surrounding context.
         // ----------------------------------------------------------------
-        private JArray ScanSdkCallerSources(IEnumerable<string> callerNames, string canonicalName)
+        internal JArray ScanSdkCallerSources(IEnumerable<string> callerNames, string canonicalName, string moduleQualifiedName)
         {
             var sites = new JArray();
-            if (_objectService == null || callerNames == null) return sites;
+            if ((_objectService == null && _callerSourceReader == null) || callerNames == null) return sites;
             foreach (var callerName in callerNames.Distinct(StringComparer.OrdinalIgnoreCase).Take(50))
             {
                 foreach (var partName in new[] { "Source", "Events", "Rules" })
                 {
                     string source = null;
-                    try { source = _objectService.ReadObjectSource(callerName, partName); } catch { }
+                    try { source = ReadCallerSource(callerName, partName); } catch { }
                     if (string.IsNullOrWhiteSpace(source)) continue;
                     var trimmed = source.TrimStart();
                     if (trimmed.StartsWith("{") && trimmed.IndexOf("\"error\"", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -2402,10 +2410,7 @@ namespace GxMcp.Worker.Services
                     var lines = source.Split('\n');
                     foreach (var call in SourceParser.ParseCalls(source, false))
                     {
-                        var callee = call.Callee ?? string.Empty;
-                        var unqualified = callee.Substring(callee.LastIndexOf('.') + 1);
-                        if (!string.Equals(callee, canonicalName, StringComparison.OrdinalIgnoreCase)
-                            && !string.Equals(unqualified, canonicalName, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (!CallSiteMatcher.Matches(call, canonicalName, moduleQualifiedName)) continue;
                         int index = Math.Max(0, call.LineNumber - 1);
                         sites.Add(new JObject
                         {
@@ -2419,6 +2424,12 @@ namespace GxMcp.Worker.Services
                 }
             }
             return sites;
+        }
+
+        private string ReadCallerSource(string callerName, string partName)
+        {
+            if (_callerSourceReader != null) return _callerSourceReader(callerName, partName);
+            return _objectService?.ReadObjectSource(callerName, partName);
         }
 
         public string FindCallerSites(string targetName)
@@ -2437,6 +2448,9 @@ namespace GxMcp.Worker.Services
                     return Models.McpResponse.Err(code: "ObjectNotFound", message: "Object not found in index.", hint: "The object was not found in the search index. Re-run after genexus_lifecycle action=index completes.", nextSteps: new JArray(Models.McpResponse.NextStep("genexus_lifecycle", new JObject { ["action"] = "index", ["force"] = true }, "Forces a full KB rescan so the object becomes discoverable.")), target: targetName);
 
                 string canonicalName = entry.Name ?? targetName;
+                string moduleQualifiedName = string.IsNullOrWhiteSpace(entry.Module)
+                    ? canonicalName
+                    : entry.Module.Trim() + "." + canonicalName;
                 var callerNames = entry.CalledBy ?? new List<string>();
 
                 var callers = new JArray();
@@ -2451,7 +2465,7 @@ namespace GxMcp.Worker.Services
                         string src = null;
                         try
                         {
-                            src = _objectService?.ReadObjectSource(callerName, partName);
+                            src = ReadCallerSource(callerName, partName);
                             // Skip ReadObjectSource error envelopes — must look like a JSON error
                             // object, NOT any source line that happens to contain the word "error".
                             // Two shapes occur: {"status":"Error",...} and {"error":"..."} (no status).
@@ -2480,14 +2494,7 @@ namespace GxMcp.Worker.Services
                         var lines = src.Split('\n');
                         foreach (var call in SourceParser.ParseCalls(src, false))
                         {
-                            if (!string.Equals(call.Callee, canonicalName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                // Also match unqualified suffix
-                                int dot = call.Callee?.LastIndexOf('.') ?? -1;
-                                string unqualified = dot >= 0 ? call.Callee.Substring(dot + 1) : call.Callee;
-                                if (!string.Equals(unqualified, canonicalName, StringComparison.OrdinalIgnoreCase))
-                                    continue;
-                            }
+                            if (!CallSiteMatcher.Matches(call, canonicalName, moduleQualifiedName)) continue;
 
                             int idx = call.LineNumber - 1;
                             string lineText = idx >= 0 && idx < lines.Length ? lines[idx] : "";
@@ -2537,7 +2544,7 @@ namespace GxMcp.Worker.Services
                         var sdkCallers = new JArray();
                         foreach (var c in sdk.Callers) sdkCallers.Add(c);
                         zeroResult["sdkCallers"] = sdkCallers;
-                        var sdkSites = ScanSdkCallerSources(sdk.Callers, canonicalName);
+                        var sdkSites = ScanSdkCallerSources(sdk.Callers, canonicalName, moduleQualifiedName);
                         if (sdkSites.Count > 0)
                         {
                             zeroResult["callSiteCount"] = sdkSites.Count;
@@ -2547,7 +2554,8 @@ namespace GxMcp.Worker.Services
                             return McpResponse.Ok(target: canonicalName, code: "CallerSitesFound", result: zeroResult);
                         }
                         zeroResult["verifiedZero"] = false;
-                        zeroResult["hint"] = "The index had no caller edges yet, but the live SDK reference graph found callers (listed under sdkCallers). Line-level call sites weren't resolved because the index isn't enriched — re-run shortly, or use genexus_read on the listed callers.";
+                        zeroResult["scannedParts"] = new JArray("Source", "Events", "Rules");
+                        zeroResult["hint"] = "The live SDK reference graph found callers, but no supported call syntax was recognized in their Source, Events, or Rules parts. Read those parts directly if the call form is not covered.";
                         return McpResponse.Ok(target: canonicalName, code: "CallerSitesUnconfirmed", result: zeroResult);
                     }
                     // SDK confirms genuinely zero incoming references.

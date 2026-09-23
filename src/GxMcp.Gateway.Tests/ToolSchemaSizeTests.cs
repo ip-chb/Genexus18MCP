@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace GxMcp.Gateway.Tests
@@ -213,6 +216,36 @@ namespace GxMcp.Gateway.Tests
             //   object_atomic variables[] field, and read/write discoverability
             //   copy. Measured ~31874 tokens.
             Assert.True(approxTokens < 32000, $"tool_definitions.json is ~{approxTokens} tokens; budget 32000.");
+        }
+
+        [Theory]
+        [InlineData("all", 80000)]
+        [InlineData("core", 25000)]
+        [InlineData("standard", 60000)]
+        [InlineData("authoring", 60000)]
+        [InlineData("devops", 50000)]
+        [InlineData("ui", 50000)]
+        [InlineData("db", 40000)]
+        public void PublishedToolProfileStaysWithinItsByteBudget(string profile, int maxBytes)
+        {
+            var tools = JArray.Parse(File.ReadAllText(FindToolDefinitionsJson()));
+            var filtered = ToolProfileFilter.Filter(tools, profile);
+            int bytes = Encoding.UTF8.GetByteCount(filtered.ToString(Formatting.None));
+
+            Assert.True(bytes <= maxBytes, $"Tool profile '{profile}' is {bytes} bytes; budget {maxBytes}.");
+        }
+
+        [Fact]
+        public void NoPublishedToolSchemaExceedsItsByteBudget()
+        {
+            var tools = JArray.Parse(File.ReadAllText(FindToolDefinitionsJson()));
+            var publishedTools = ToolProfileFilter.Filter(tools, "all");
+
+            foreach (JObject tool in publishedTools)
+            {
+                int bytes = Encoding.UTF8.GetByteCount(tool.ToString(Formatting.None));
+                Assert.True(bytes <= 8000, $"Tool '{tool["name"]}' is {bytes} bytes; per-tool budget 8000.");
+            }
         }
     }
 }

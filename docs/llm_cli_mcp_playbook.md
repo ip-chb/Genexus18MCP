@@ -103,6 +103,34 @@ with `commandStale: false`, not as stale, because the launcher is valid. `doctor
 
 For `tools/call`, parse `result.content[0].text` as JSON.
 
+### Tool profiles and schema budgets
+
+New neutral configs created by `genexus-mcp init` or client registration use
+`Server.ToolProfile: "standard"`; existing gateway configs are not rewritten.
+`genexus_whoami` reports the active profile and how to select another one.
+
+| Profile | Tools | Use |
+|---|---:|---|
+| `standard` | 16 | Recommended default for Cursor, Codex, OpenCode, Antigravity, Claude Desktop, and other clients that eagerly load every schema. Includes core read/search/lifecycle, create, structure, variable, properties, and IO tools. |
+| `core` | 11 | Read, search, inspect, edit, and lifecycle essentials. |
+| `authoring` | 29 | Core plus the full object-authoring and refactoring surface. |
+| `devops` | 33 | Core plus build, versioning, deployment, diagnostics, and worker operations. |
+| `ui` | 18 | Core plus layout, form, browser, and WorkWithPlus tools. |
+| `db` | 15 | Core plus database and data-view tools. |
+| `all` | 54 | Every canonical tool; use when an agent needs an unrestricted surface. |
+
+Profiles can be combined with `+`, for example `standard+db`. Set
+`Server.ToolProfile` in config or `GXMCP_PROFILE` in the process environment.
+Calling a known tool outside the active profile returns `ToolNotInProfile` with
+the profile(s) that expose it and the setting to change. Legacy alias names
+remain callable through compatibility rewrites but are not listed as tools.
+
+The public list omits examples and shortens long descriptions to stay within
+the enforced per-profile and per-tool byte budgets. Each tool description
+points to `genexus://kb/tool-help/<tool>`; read that resource when full
+constraints, rationale, or examples are needed. The original description and
+complete input schema remain available there.
+
 ### KB context, leases, and compatibility
 
 Use the neutral `stdio-isolated` + `ResolutionPolicy: "strict"` configuration

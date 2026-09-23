@@ -224,7 +224,7 @@ namespace GxMcp.Worker.Services
         private static int CountLoneLf(string value) => (value ?? string.Empty).Replace("\r\n", string.Empty).Count(c => c == '\n');
         private static int CountLoneCr(string value) => (value ?? string.Empty).Replace("\r\n", string.Empty).Count(c => c == '\r');
         private static bool IsSourceOrRules(string partName) => IsCodeOrTextPart(partName);
-        private static bool IsCodeOrTextPart(string partName) => string.IsNullOrWhiteSpace(partName)
+        internal static bool IsCodeOrTextPart(string partName) => string.IsNullOrWhiteSpace(partName)
             || string.Equals(partName, "Source", StringComparison.OrdinalIgnoreCase)
             || string.Equals(partName, "Rules", StringComparison.OrdinalIgnoreCase)
             || string.Equals(partName, "Events", StringComparison.OrdinalIgnoreCase)

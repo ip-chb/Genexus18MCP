@@ -58,7 +58,7 @@ namespace GxMcp.Worker
 
             try
             {
-                var frame = JObject.Parse(line);
+                var frame = GxMcp.Common.JsonIngress.ParseObject(line);
                 string type = frame.Value<string>("type") ?? frame.Value<string>("gxmcp") ?? string.Empty;
                 if (!HostFrameTypes.Contains(type))
                 {

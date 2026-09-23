@@ -3028,7 +3028,7 @@ namespace GxMcp.Worker.Services
         // them as Calls / CalledBy if the identifier matches a known object in the index.
         private static readonly System.Text.RegularExpressions.Regex _identifierCall =
             new System.Text.RegularExpressions.Regex(
-                @"\b([A-Z][A-Za-z0-9_]{2,})(?:\s*\.\s*[A-Za-z0-9_]+)?\s*\(",
+                @"(?<![A-Za-z0-9_&])([A-Z][A-Za-z0-9_]{2,})(?:\s*\.\s*[A-Za-z0-9_]+)?\s*\(",
                 System.Text.RegularExpressions.RegexOptions.Compiled);
 
         private bool EnrichCallsFromTextualScan(
@@ -3038,13 +3038,40 @@ namespace GxMcp.Worker.Services
         {
             if (obj == null || entry == null || index?.Objects == null) return false;
 
-            var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var sourceParts = new List<string>();
             foreach (var part in obj.Parts.Cast<global::Artech.Architecture.Common.Objects.KBObjectPart>())
             {
                 string src = null;
                 try { if (part is ISource sp) src = sp.Source; }
                 catch { }
+                if (!string.IsNullOrEmpty(src)) sourceParts.Add(src);
+            }
+
+            return EnrichCallsFromTextualSources(sourceParts, entry, index);
+        }
+
+        internal bool EnrichCallsFromTextualSources(
+            IEnumerable<string> sourceParts,
+            SearchIndex.IndexEntry entry,
+            SearchIndex index)
+        {
+            if (sourceParts == null || entry == null || index?.Objects == null) return false;
+
+            var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var parsedCallsByCandidate = new Dictionary<string, List<ParsedCall>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var src in sourceParts)
+            {
                 if (string.IsNullOrEmpty(src)) continue;
+
+                foreach (var call in SourceParser.ParseCalls(src, false))
+                {
+                    string name = CallSiteMatcher.GetCandidateObjectName(call);
+                    if (string.IsNullOrEmpty(name) || name.Length < 3) continue;
+                    candidates.Add(name);
+                    if (!parsedCallsByCandidate.TryGetValue(name, out var calls))
+                        parsedCallsByCandidate[name] = calls = new List<ParsedCall>();
+                    calls.Add(call);
+                }
 
                 foreach (System.Text.RegularExpressions.Match m in _identifierCall.Matches(src))
                 {
@@ -3068,6 +3095,13 @@ namespace GxMcp.Worker.Services
                 {
                     string key = typePrefix + ":" + name;
                     if (!index.Objects.TryGetValue(key, out var target) || target == null) continue;
+
+                    string moduleQualifiedName = string.IsNullOrWhiteSpace(target.Module)
+                        ? target.Name
+                        : target.Module.Trim() + "." + target.Name;
+                    if (parsedCallsByCandidate.TryGetValue(name, out var calls)
+                        && !calls.Any(call => CallSiteMatcher.Matches(call, target.Name, moduleQualifiedName)))
+                        continue;
 
                     if (AddCallCow(entry, target.Name)) changed = true;
                     if (AddCalledByCow(target, entry.Name)) { changed = true; MarkShardDirty(key); }

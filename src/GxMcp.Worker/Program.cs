@@ -619,7 +619,7 @@ namespace GxMcp.Worker
         private static void SendQueueBusy(string line, string queueName)
         {
             string idJson = "null";
-            try { idJson = JObject.Parse(line)["id"]?.ToString() ?? "null"; }
+            try { idJson = GxMcp.Common.JsonIngress.ParseObject(line)["id"]?.ToString() ?? "null"; }
             catch { }
 
             string busy = GxMcp.Worker.Models.McpResponse.Err(
@@ -680,14 +680,12 @@ namespace GxMcp.Worker
                 ShuttingDown = true;
 
                 // Signal the gateway: persist your JobRegistry NOW before we exit.
-                // The gateway listens for this and dumps to publish\worker\state\jobs.json.
+                // Gateway writes its own scoped job snapshot; this path is diagnostic only.
                 try
                 {
-                    string stateDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "state");
-                    try { Directory.CreateDirectory(stateDir); }
-                    catch (Exception dirEx) { Logger.Error("[SoftReload] state dir create failed: " + dirEx.Message); }
+                    string jobsPath = Path.Combine(RuntimePaths.StateRoot, "jobs.json");
                     SendNotification("notifications/worker/persist_jobs_request", new {
-                        path = Path.Combine(stateDir, "jobs.json"),
+                        path = jobsPath,
                         reason = "soft_reload"
                     });
                 }
@@ -969,7 +967,7 @@ namespace GxMcp.Worker
         {
             try
             {
-                var o = JObject.Parse(line);
+                var o = GxMcp.Common.JsonIngress.ParseObject(line);
                 return DescribeCommand(o, line);
             }
             catch { return "?"; }
@@ -988,7 +986,7 @@ namespace GxMcp.Worker
 
         internal static string ExtractOperationId(string line)
         {
-            try { return JObject.Parse(line)["_meta"]?["progressToken"]?.ToString(); }
+            try { return GxMcp.Common.JsonIngress.ParseObject(line)["_meta"]?["progressToken"]?.ToString(); }
             catch { return null; }
         }
 
@@ -1010,7 +1008,7 @@ namespace GxMcp.Worker
             string method = null, action = null;
             try
             {
-                if (o == null && !string.IsNullOrEmpty(line)) o = JObject.Parse(line);
+                if (o == null && !string.IsNullOrEmpty(line)) o = GxMcp.Common.JsonIngress.ParseObject(line);
                 if (o == null) return false;
                 idJson = o["id"]?.ToString() ?? "null";
                 method = o["method"]?.ToString()?.ToLowerInvariant();
@@ -1049,7 +1047,7 @@ namespace GxMcp.Worker
         private static void ProcessCommand(string line)
         {
             JObject obj;
-            try { obj = JObject.Parse(line); }
+            try { obj = GxMcp.Common.JsonIngress.ParseObject(line); }
             catch (Exception ex)
             {
                 // Compatibilidade: o parse legado acontecia dentro do try do corpo; uma
@@ -1067,7 +1065,7 @@ namespace GxMcp.Worker
         // overload por string, e a linha segue para TryRejectBusy/fila STA como antes.
         private static JObject TryParseCommand(string line)
         {
-            try { return JObject.Parse(line); }
+            try { return GxMcp.Common.JsonIngress.ParseObject(line); }
             catch { return null; }
         }
 
@@ -1168,7 +1166,7 @@ namespace GxMcp.Worker
             try {
                 var transformSw = Stopwatch.StartNew();
                 object resultObj;
-                try { resultObj = JToken.Parse(result); } catch { resultObj = result; }
+                try { resultObj = GxMcp.Common.JsonIngress.ParseToken(result); } catch { resultObj = result; }
                 transformSw.Stop();
 
                 JObject resultObject = resultObj as JObject;
@@ -1342,7 +1340,7 @@ namespace GxMcp.Worker
             try {
                 string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
                 string configPath = Path.Combine(exeDir, "config.json");
-                if (File.Exists(configPath)) return JObject.Parse(File.ReadAllText(configPath));
+                if (File.Exists(configPath)) return GxMcp.Common.JsonIngress.ParseObject(File.ReadAllText(configPath));
             } catch { }
             return null;
         }

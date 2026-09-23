@@ -151,6 +151,7 @@ test('generateNeutralConfig produces valid shape without KB fields', () => {
     assert.equal(cfg.GeneXus.InstallationPath, 'C:\\GeneXus18');
     assert.ok(cfg.GeneXus.WorkerExecutable.endsWith(path.join('worker', 'GxMcp.Worker.exe')));
     assert.equal(cfg.Server.McpStdio, true);
+    assert.equal(cfg.Server.ToolProfile, 'standard');
     assert.equal(cfg.Server.TransportMode, undefined);
     assert.equal(cfg.Server.HttpPort, 0);
     assert.equal(cfg.Environment.ResolutionPolicy, 'strict');

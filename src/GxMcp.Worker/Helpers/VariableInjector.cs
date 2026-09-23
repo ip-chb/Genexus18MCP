@@ -557,14 +557,13 @@ namespace GxMcp.Worker.Helpers
                 // Format: &Name : Type(Length,Decimals) [Collection]
                 // issue #281: allow ':' in the type token so "Attribute:<name>"
                 // round-trips instead of being truncated to "Attribute".
-                var match = System.Text.RegularExpressions.Regex.Match(line, @"&?(\w+)\s*:\s*([\w\.\-:]+)(?:\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\))?(?:\s+(Collection))?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                if (match.Success)
+                if (VariableDeclarationParser.TryParse(line, out var declaration))
                 {
-                    string name = match.Groups[1].Value;
-                    string typeStr = match.Groups[2].Value;
-                    int length = match.Groups[3].Success ? int.Parse(match.Groups[3].Value) : 0;
-                    int decimals = match.Groups[4].Success ? int.Parse(match.Groups[4].Value) : 0;
-                    bool isCollection = match.Groups[5].Success;
+                    string name = declaration.Name;
+                    string typeStr = declaration.TypeName;
+                    int length = declaration.Length;
+                    int decimals = declaration.Decimals;
+                    bool isCollection = declaration.IsCollection;
 
                     seenVars.Add(name);
 
@@ -631,7 +630,7 @@ namespace GxMcp.Worker.Helpers
                             }
                             else if (targetObj.TypeDescriptor.Name.Equals("SDT", StringComparison.OrdinalIgnoreCase))
                             {
-                                if (!BindVariableToSdt(v, targetObj, out var sdtFailure))
+                                if (!BindVariableToSdt(v, targetObj, out var sdtFailure, typeStr))
                                     throw new InvalidOperationException("VariableTypeNotPersisted: " + sdtFailure);
                             }
                             else if (targetObj is global::Artech.Genexus.Common.Objects.Transaction trn && trn.IsBusinessComponent)
@@ -639,6 +638,10 @@ namespace GxMcp.Worker.Helpers
                                 BindVariableToBC(v, targetObj);
                             }
                             Logger.Info($"Resolved variable {name} type to {targetObj.TypeDescriptor.Name}: {targetObj.Name}");
+                        }
+                        else if (VariableDeclarationParser.TrySplitModuleQualifiedTypeName(typeStr, out _, out string moduleName))
+                        {
+                            throw new InvalidOperationException("Module-qualified type '" + typeStr + "' was not found in module '" + moduleName + "'.");
                         }
                     }
 
@@ -662,7 +665,7 @@ namespace GxMcp.Worker.Helpers
             }
         }
 
-        public static bool BindVariableToSdt(global::Artech.Genexus.Common.Variable v, KBObject sdtObj, out string failure)
+        public static bool BindVariableToSdt(global::Artech.Genexus.Common.Variable v, KBObject sdtObj, out string failure, string typeName = null)
         {
             failure = null;
             if (v == null || sdtObj == null)
@@ -697,7 +700,8 @@ namespace GxMcp.Worker.Helpers
                 try { DomainPropertyApplier.ClearAttributeBasedOn((object)v); } catch { }
                 v.Type = global::Artech.Genexus.Common.eDBType.GX_SDT;
                 v.SetPropertyValue("DataType", sdtObj.Key);
-                try { v.SetPropertyValue("DataTypeString", sdtObj.Name); } catch (Exception ex) { Logger.Warn("DataTypeString set failed: " + ex.Message); }
+                string typeText = string.IsNullOrWhiteSpace(typeName) ? sdtObj.Name : typeName.Trim();
+                try { v.SetPropertyValue("DataTypeString", typeText); } catch (Exception ex) { Logger.Warn("DataTypeString set failed: " + ex.Message); }
                 try { v.SetPropertyValue("ATTCUSTOMTYPE", inst); }
                 catch (Exception ex)
                 {
@@ -1362,8 +1366,12 @@ namespace GxMcp.Worker.Helpers
         {
             try
             {
-                foreach (var obj in model.Objects.GetByName(null, null, typeName))
+                bool hasModuleQualifier = VariableDeclarationParser.TrySplitModuleQualifiedTypeName(typeName, out string qualifiedObjectName, out string moduleName);
+                string objectName = hasModuleQualifier ? qualifiedObjectName : typeName;
+                foreach (var obj in model.Objects.GetByName(null, null, objectName))
                 {
+                    if (hasModuleQualifier && !string.Equals(obj.Module?.Name, moduleName, StringComparison.OrdinalIgnoreCase)) continue;
+
                     // Check for Domain
                     if (obj is global::Artech.Genexus.Common.Objects.Domain) return obj;
 
@@ -1381,11 +1389,12 @@ namespace GxMcp.Worker.Helpers
                 // is — so split off the parent and resolve it. BindVariableToSdt(newVar, parentSdt) then
                 // produces the "<Sdt>.<Sdt>Item" item type, since the SDK derives the ".Item" suffix
                 // from the SDT's own collection-ness (IsCollection left false), matching the read form.
-                if (typeName != null && typeName.IndexOf('.') > 0)
+                if (objectName != null && objectName.IndexOf('.') > 0)
                 {
-                    string parentName = typeName.Substring(0, typeName.IndexOf('.'));
+                    string parentName = objectName.Substring(0, objectName.IndexOf('.'));
                     foreach (var obj in model.Objects.GetByName(null, null, parentName))
                     {
+                        if (hasModuleQualifier && !string.Equals(obj.Module?.Name, moduleName, StringComparison.OrdinalIgnoreCase)) continue;
                         if (obj.TypeDescriptor.Name.Equals("SDT", StringComparison.OrdinalIgnoreCase)) return obj;
                     }
                 }

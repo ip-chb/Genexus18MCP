@@ -226,7 +226,7 @@ namespace GxMcp.Gateway
                     _cachedToolsListResponse = new JObject
                     {
                         ["resultType"] = "complete",
-                        ["tools"] = _toolDefinitions,
+                        ["tools"] = ToolProfileFilter.GetOrCreateFiltered(_toolDefinitions, "all"),
                         ["ttlMs"] = 3600000,
                         ["cacheScope"] = "public"
                     };
@@ -243,6 +243,21 @@ namespace GxMcp.Gateway
             {
                 Program.Log($"[McpRouter] ERROR loading tool definitions: {ex.Message}");
             }
+        }
+
+        internal static JObject? FindToolDefinitionForHelp(string toolName)
+        {
+            if (string.IsNullOrWhiteSpace(toolName)) return null;
+
+            string lookupName = toolName;
+            if (!_declaredToolNames.Contains(lookupName)
+                && TryRewriteLegacyTool(toolName, null, out string canonicalName, out _))
+            {
+                lookupName = canonicalName;
+            }
+
+            return _toolDefinitions.OfType<JObject>().FirstOrDefault(definition =>
+                string.Equals(definition["name"]?.ToString(), lookupName, StringComparison.OrdinalIgnoreCase));
         }
 
         private static void SetupToolDefinitionsWatcher()
@@ -424,7 +439,7 @@ namespace GxMcp.Gateway
                             return _cachedToolsListResponse ?? new JObject
                             {
                                 ["resultType"] = "complete",
-                                ["tools"] = _toolDefinitions,
+                                ["tools"] = ToolProfileFilter.GetOrCreateFiltered(_toolDefinitions, "all"),
                                 ["ttlMs"] = 3600000,
                                 ["cacheScope"] = "public"
                             };
@@ -1979,11 +1994,17 @@ namespace GxMcp.Gateway
                 "saveAttempted", "verificationUnavailable", "postSaveVerification",
                 "readCode", "readCompleted", "readError", "sdkSaveCompleted", "persistedStateKnown",
                 "implicitLifecycleActions", "mutation", "partialPersistenceDetected",
-                "requireObjectSave", "objectSaved", "partPersisted", "saveContract", "metadataStampPersisted"
+                "requireObjectSave", "objectSaved", "partPersisted", "saveContract", "metadataStampPersisted",
+                // Patch NoMatch diagnostics are nested in the worker's canonical
+                // error envelope; keep them at the response level named by the
+                // synthesized inspect_near_match hint.
+                "nearMatches", "nearMatchHint", "nearMatchHintDetail", "eolDiff",
+                "did_you_mean", "noNearMatchHint"
             };
             foreach (var k in diagnosticKeys)
             {
-                if (error[k] != null) trimmed[k] = error[k];
+                var value = ResolveErrorField(error, k);
+                if (value != null) trimmed[k] = value;
             }
             // Issue #260: pattern resolution errors name what the caller must pick next
             // (the instances of an ambiguous parent, the installed patterns, the patterns

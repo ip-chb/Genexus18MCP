@@ -203,5 +203,55 @@ namespace GxMcp.Worker.Tests
             Assert.Equal("newer content", result["source"]);
             Assert.Equal("35", result["versionToken"]);
         }
+
+        [Fact]
+        public void Issue301_ImportPart_PureLineEndingDifference_ClassifiesAsNormalization()
+        {
+            const string requested = "Event 'Start'\r\n    &x = 1\r\nEndEvent";
+            const string persisted = "Event 'Start'\n    &x = 1\nEndEvent";
+
+            var result = WriteService.EvaluatePersistedVerification(requested, persisted, false, null, verifyMode: null, partName: "Events");
+            Assert.True(result.Matches);
+            Assert.Equal("normalization", result.Reason);
+            Assert.Equal("verified", result.State);
+        }
+
+        [Fact]
+        public void Issue301_BuildPersistenceDiff_DoesNotReportEmptyFirstDifferentLine_WhenOnlyEolDiffers()
+        {
+            const string requested = "\r\nEvent 'Start'\r\n    &x = 1\r\nEndEvent";
+            const string persisted = "\nEvent 'Start'\n    &x = 1\nEndEvent";
+
+            var verification = WriteService.EvaluatePersistedVerification(requested, persisted, false, null, verifyMode: null, partName: "Events");
+            var diff = typeof(WriteService).GetMethod("BuildPersistenceDiff", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(null, new object[] { requested, persisted, verification, true }) as JObject;
+
+            Assert.NotNull(diff);
+            Assert.Null(diff!["firstDifferentLine"]?.Value<int?>());
+            Assert.Null(diff["expectedLine"]?.Value<string>());
+            Assert.Null(diff["readLine"]?.Value<string>());
+            Assert.Equal("CRLF", diff["expectedLineEnding"]?.ToString());
+            Assert.Equal("LF", diff["readLineEnding"]?.ToString());
+        }
+
+        [Fact]
+        public void Issue301_ApplyTextVerificationReceipt_DoesNotReportPartialPersistenceDetected_WhenOnlyEolDiffers()
+        {
+            const string before = "Event 'Old'\r\nEndEvent";
+            const string requested = "Event 'New'\r\n    &y = 2\r\nEndEvent";
+            const string actual = "Event 'New'\n    &y = 2\nEndEvent";
+
+            var response = new JObject
+            {
+                ["status"] = "ok",
+                ["code"] = "WriteApplied",
+                ["sdkSaveCompleted"] = true
+            };
+
+            var receipt = WriteService.ApplyTextVerificationReceipt(response, "WPTest", "Events", before, requested, actual, "v1", false, null, null);
+            Assert.True(receipt["verified"]?.Value<bool>());
+            Assert.True(receipt["persisted"]?.Value<bool>());
+            Assert.Null(receipt["partialPersistenceDetected"]);
+        }
     }
 }

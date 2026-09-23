@@ -56,6 +56,57 @@ class OperationContractInventoryTests(unittest.TestCase):
         analyze = next(row for row in inventory["tools"] if row["tool"] == "genexus_analyze")
         self.assertEqual(analyze["actions"][0]["kind"], "modeDependent")
 
+    def test_journal_policy_includes_argument_selected_variants(self):
+        from importlib.util import module_from_spec, spec_from_file_location
+        spec = spec_from_file_location("inventory", SCRIPT)
+        module = module_from_spec(spec)
+        assert spec and spec.loader
+        spec.loader.exec_module(module)
+        inventory = module.build_inventory()
+        tools = {row["tool"]: row for row in inventory["tools"]}
+        recovery = {row["action"]: row for row in tools["genexus_connection_recover"]["actions"]}
+
+        status = recovery["journal_status"]
+        self.assertEqual(status["kind"], "readOnly")
+        self.assertEqual(status["effects"], "file.read")
+        self.assertEqual(status["execution"], "gateway")
+        self.assertEqual(status["retry"], "safe")
+        self.assertEqual(status["cache"], "never")
+        self.assertEqual(status["invalidation"], [])
+        self.assertFalse(status["previewSupported"])
+
+        repair = recovery["journal_repair"]
+        self.assertEqual(repair["kind"], "readOnly")
+        self.assertEqual(repair["effects"], "file.read")
+        self.assertTrue(repair["previewSupported"])
+        self.assertEqual([variant["selector"] for variant in repair["variants"]],
+                         [{"dryRun": "not false"}, {"dryRun": False}])
+        self.assertEqual(repair["variants"][0]["kind"], "readOnly")
+        self.assertEqual(repair["variants"][0]["retry"], "safe")
+        self.assertEqual(repair["variants"][1]["kind"], "mutating")
+        self.assertEqual(repair["variants"][1]["effects"], "file.write")
+        self.assertEqual(repair["variants"][1]["invalidation"], ["files"])
+
+        for tool_name in ("genexus_connection_recover", "genexus_worker_reload"):
+            action = tools[tool_name]["actions"][0]
+            self.assertEqual(action["execution"], "gateway")
+            self.assertEqual(action["effects"], "process.write")
+            self.assertEqual(action["invalidation"], ["process", "sessions"])
+
+    def test_check_detects_stale_published_inventory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stale = Path(temp) / "operation-contract-inventory.json"
+            stale.write_text("{}\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--check", "--output", str(stale)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("published inventory differs", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

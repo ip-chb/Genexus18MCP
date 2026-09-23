@@ -30,5 +30,30 @@ namespace GxMcp.Gateway.Tests
             Assert.True(string.IsNullOrEmpty(command["target"]?.ToString()));
             Assert.Equal("job-3", command["cancelToken"]!.ToString());
         }
+
+        [Fact]
+        public void BuildCommandFactory_UsesSpecifyActionWhenWrappedAsync()
+        {
+            var command = Program.BuildAsyncLifecycleCommand(
+                "specify",
+                new JObject { ["target"] = "Customer" },
+                "job-specify");
+
+            Assert.Equal("Specify", command["action"]!.ToString());
+            Assert.Equal("Customer", command["target"]!.ToString());
+        }
+
+        [Fact]
+        public void SpecifyUsesAsyncOperationPathOnlyWhenWaitUntilDoneIsRequested()
+        {
+            Assert.True(Program.ShouldDispatchLifecycleBuildAsync(
+                "genexus_lifecycle", "specify", new JObject { ["wait_until_done"] = true }));
+            Assert.False(Program.ShouldDispatchLifecycleBuildAsync(
+                "genexus_lifecycle", "specify", new JObject { ["wait_until_done"] = false }));
+            Assert.False(Program.ShouldDispatchLifecycleBuildAsync(
+                "genexus_lifecycle", "specify", new JObject { ["wait_until_done"] = true, ["dryRun"] = true }));
+            Assert.False(Program.ShouldDispatchLifecycleBuildAsync(
+                "genexus_lifecycle", "query", new JObject { ["wait_until_done"] = true }));
+        }
     }
 }

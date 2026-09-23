@@ -35,6 +35,17 @@ All are optional. Unset means the documented default applies.
 
 The effective path remains in every successful response: wiki returns `result.file` and `result.outputDirectory`; visualize returns `result.url` and `result.outputDirectory`. Visualizer/health read the active KB's canonical `IndexCacheService` snapshot. Generated filenames are validated as single path components; separators and traversal are rejected rather than sanitized.
 
+## Worker runtime files
+
+Worker-owned state, diagnostics, build logs, and temporary output stay outside the executable/package directory. Managed Workers receive an opaque operational-state key from the Gateway so separate KB generations do not share default runtime folders. Build responses keep the same `fullLogPath` contract; only the destination root changes.
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `GXMCP_STATE_DIR` | Optional Worker state root (for example preview configuration and soft-reload path hints). The Gateway still persists job snapshots under its own scoped state directory. | `%LOCALAPPDATA%\GenexusMCP\state\<operational-key-hash>` |
+| `GXMCP_LOG_DIR` | Optional Worker log root; the Gateway sets a per-operational-state directory for managed Workers. The Gateway's own debug log also honors this variable. | `%LOCALAPPDATA%\GenexusMCP\logs\<operational-key-hash>` |
+
+Temporary Worker diagnostics use `%LOCALAPPDATA%\GenexusMCP\tmp\<operational-key-hash>`. Preview configuration/baselines use the state root; build output and rotated Worker logs use the log root. `GXMCP_BUILD_LOG_RETAIN_COUNT` still controls retention there.
+
 ## AI-completion proxy (`genexus_ai_complete`)
 
 | Variable | Purpose | Default |
@@ -121,7 +132,21 @@ Precedence is: tool `auth` argument > these env vars > built-in default.
 | Variable | Purpose |
 |----------|---------|
 | `GXMCP_SERVER_VERSION` | The gateway injects the server version into the worker's environment on spawn. Reading it in worker code is fine; setting it externally has no effect. |
+| `GXMCP_DRIVER` | Gateway-selected Worker driver (`native-sdk`, `dotnet-reflection`, or `com-gxpublic`), injected when it launches a Worker or shared Worker host. Do not set by hand. |
+| `GXMCP_TARGET_MAJOR` | Gateway-selected GeneXus major injected with the Worker driver; the Worker uses it for version-specific compatibility/provider behavior. Do not set by hand. |
 | `GXMCP_PROFILE_CONFIG_PATH` | The gateway injects the absolute profile path into the worker so preview `axiCli` values are resolved relative to the MCP profile instead of the process current directory. |
+| `GXMCP_OPERATIONAL_STATE_KEY` | The Gateway injects an opaque key for the current Worker operational state scope; Worker runtime roots hash it for per-scope separation. Do not set by hand. |
+| `GXMCP_SHARED_CHILD` | `SharedWorkerHost` injects `1` when it starts the shared Worker child. The child skips the stdin `ping` shortcut for literal `ping` (trimmed, case-insensitive), `"method":"ping"`, and `"action":"Ping"`: it emits no inline `Ready` envelope and queues those lines normally (a full queue may return `WorkerBusy`). Readiness still arrives via `notifications/worker/sdk_ready`; a queued `"method":"ping"` returns `Ok` (`Pong`) when dispatched. Do not set by hand. |
+
+In shared-host mode, `heartbeat_ack` acknowledges the Gateway↔host attachment; it is not a heartbeat response sent by the host on behalf of the child.
+
+## Legacy GXPublic provider
+
+`com-gxpublic` uses the 32-bit GXPublic OLE DB provider registered for the selected legacy GeneXus major. A Gateway-managed Worker probes registered providers for that major and injects the selected ProgID; this detected value takes precedence over an inherited environment value. A directly launched Worker can use the operator-configurable preferred ProgID below, which is tried before the major-specific candidates.
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `GXMCP_GXPUBLIC_PROVIDER` | Preferred 32-bit GXPublic OLE DB ProgID for a directly launched Worker. Gateway-managed sessions use the provider selected by the Gateway registry probe. | unset (Gateway selection or Worker candidate order) |
 
 ## Preview browser driver
 
