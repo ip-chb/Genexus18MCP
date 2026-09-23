@@ -2,6 +2,10 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $sourcePath = Join-Path $root 'scripts\integration-preflight.ps1'
 $source = Get-Content -LiteralPath $sourcePath -Raw
+$contractPredicate = [regex]::Match($source, '\$contractTouched\s*=\s*@\(\s*\$Paths\s*\|\s*Where-Object\s*\{(?<predicate>[\s\S]*?)\}\s*\)')
+if (-not $contractPredicate.Success -or $contractPredicate.Groups['predicate'].Value -match 'Routers/') {
+    throw 'The tools/list golden guard must track discovery schema surfaces, not every router implementation.'
+}
 
 foreach ($requiredText in @(
     'gxmcp-integration-preflight/1',

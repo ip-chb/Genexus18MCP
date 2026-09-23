@@ -97,7 +97,7 @@ function Test-ChangedSet {
     }
 
     $contractTouched = @($Paths | Where-Object {
-        $_ -match '(^|/)(tool_definitions\.json|Routers/|src/GxMcp\.Gateway/.*CommandDispatcher\.cs$|ToolHelpCatalog\.cs$)'
+        $_ -match '(^|/)(tool_definitions\.json|src/GxMcp\.Gateway/.*CommandDispatcher\.cs$|ToolHelpCatalog\.cs$)'
     })
     if ($contractTouched.Count -gt 0 -and $Paths -notcontains 'src/GxMcp.Gateway.Tests/Fixtures/Contract/Discovery/tools-list.response.json') {
         throw 'A schema/router/dispatcher/help change must include the discovery golden fixture.'
