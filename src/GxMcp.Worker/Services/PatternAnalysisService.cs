@@ -135,11 +135,11 @@ namespace GxMcp.Worker.Services
             catch { return null; }
         }
 
-        public string GetWWPStructure(string target)
+        public string GetWWPStructure(string target, string guid = null, string entityKey = null, string typeFilter = null, string path = null)
         {
             try
             {
-                var obj = _objectService.FindObject(target);
+                var obj = _objectService.FindObject(target, typeFilter, guid, entityKey, path);
                 if (obj == null) return Models.McpResponse.Err(
                     code: "ObjectNotFound",
                     message: "Object not found.",
@@ -172,49 +172,33 @@ namespace GxMcp.Worker.Services
                         extra: new JObject { ["objectName"] = obj.Name, ["objectType"] = typeName });
                 }
 
-                KBObject instanceObj = ResolveWWPInstance(obj);
-                if (instanceObj == null) return Models.McpResponse.Err(
-                    code: "WWPInstanceNotFound",
-                    message: "WorkWithPlus instance not found.",
-                    hint: "No WorkWithPlus instance was resolved for the requested object.",
-                    nextSteps: new JArray(Models.McpResponse.NextStep(
-                        tool: "genexus_list_objects",
-                        args: new JObject { ["type"] = "WorkWithPlus" },
-                        why: "List all WorkWithPlus instances to find the one associated with this object.")),
-                    target: target);
-
-                var part = FindPatternPart(instanceObj, "PatternInstance");
-                if (part == null) return Models.McpResponse.Err(
-                    code: "PatternInstancePartNotFound",
-                    message: "PatternInstance part not found.",
-                    hint: "The WorkWithPlus instance does not expose a PatternInstance part.",
-                    nextSteps: new JArray(Models.McpResponse.NextStep(
-                        tool: "genexus_inspect",
-                        args: new JObject { ["name"] = instanceObj.Name },
-                        why: "Returns availableParts so you can identify the correct part name.")),
-                    target: target,
-                    extra: new JObject
-                    {
-                        ["objectName"] = instanceObj.Name,
-                        ["objectType"] = instanceObj.TypeDescriptor?.Name,
-                        ["availableParts"] = new JArray(GxMcp.Worker.Structure.PartAccessor.GetAvailableParts(instanceObj))
-                    });
-
-                string xml = ExtractEditablePatternXml(part, instanceObj);
+                string xml = ReadPatternPartXml(obj, "PatternInstance", PatternRegistry.WorkWithPlusPatternId,
+                    out KBObject instanceObj, out string resolvedPartName, out JObject patternDiagnostic);
                 if (string.IsNullOrEmpty(xml)) return Models.McpResponse.Err(
-                    code: "PatternInstanceXmlUnavailable",
-                    message: "PatternInstance XML not available.",
-                    hint: "The PatternInstance content could not be extracted from the resolved WorkWithPlus instance.",
+                    code: patternDiagnostic?["code"]?.ToString() ?? "PatternInstanceResolutionFailed",
+                    message: patternDiagnostic?["message"]?.ToString() ?? "PatternInstance content could not be resolved for the exact object identity.",
+                    hint: patternDiagnostic?["hint"]?.ToString() ?? "The SDK did not confirm a persisted WorkWithPlus PatternInstance for this object.",
                     nextSteps: new JArray(Models.McpResponse.NextStep(
                         tool: "genexus_read",
-                        args: new JObject { ["name"] = instanceObj.Name, ["part"] = "PatternInstance" },
-                        why: "Attempt a direct part read to surface the raw content or a more specific error.")),
+                        args: new JObject { ["guid"] = obj.Guid.ToString("D"), ["type"] = typeName, ["part"] = "PatternInstance" },
+                        why: "Read the PatternInstance through the same typed object identity.")),
                     target: target,
-                    extra: new JObject { ["objectName"] = instanceObj.Name, ["objectType"] = instanceObj.TypeDescriptor?.Name });
+                    errorExtra: patternDiagnostic ?? new JObject
+                    {
+                        ["objectName"] = obj.Name,
+                        ["objectType"] = typeName,
+                        ["objectGuid"] = obj.Guid.ToString("D"),
+                        ["entityKey"] = obj.Key?.ToString()
+                    });
 
                 var result = ParseWWPXml(xml);
                 result["resolvedObject"] = instanceObj.Name;
                 result["resolvedType"] = instanceObj.TypeDescriptor?.Name;
+                result["resolvedGuid"] = instanceObj.Guid.ToString("D");
+                result["resolvedEntityKey"] = instanceObj.Key?.ToString();
+                result["resolvedPart"] = resolvedPartName;
+                result["parentGuid"] = obj.Guid.ToString("D");
+                result["parentEntityKey"] = obj.Key?.ToString();
                 result["rawSnippet"] = xml.Length > 5000 ? xml.Substring(0, 5000) : xml;
                 return Models.McpResponse.Ok(target: target, code: "PatternMetadataRead", result: result);
             }
@@ -479,12 +463,19 @@ namespace GxMcp.Worker.Services
             // the selection outright, so a hit skips the child walk exactly like the WWP path.
             var namedPattern = registry.FindById(patternId ?? PatternRegistry.WorkWithPlusPatternId);
             string namedInstance = namedPattern?.FormatInstanceName(obj.Name);
+            bool namedOwnerUnverified = false;
             if (!string.IsNullOrWhiteSpace(namedInstance) && _objectService != null)
             {
                 var named = fresh
                     ? _objectService.FindObjectFresh(namedInstance, namedPattern.Name)
                     : _objectService.FindObject(namedInstance, namedPattern.Name);
-                if (named != null && (namedPattern.IsWorkWithPlus || InstanceBelongsTo(named, obj)))
+                // A template-derived name is only a candidate. Verify its owner even
+                // for WorkWithPlus: a same-named instance can belong to a homonymous
+                // object of another type.
+                var namedOwner = named == null ? null : ResolveInstanceParent(named);
+                if (named != null && namedOwner == null)
+                    namedOwnerUnverified = true;
+                if (named != null && namedOwner?.Guid == obj.Guid)
                 {
                     selection = SelectPatternInstance(requested, new[] { ToCandidate(named) }, patternId, registry);
                     if (selection.Status == PatternInstanceSelectionStatus.Selected) return named;
@@ -492,31 +483,69 @@ namespace GxMcp.Worker.Services
             }
 
             var children = new List<PatternInstanceCandidate>();
+            bool childEnumerationSucceeded = false;
             try
             {
                 var model = obj.Model;
-                if (model != null)
+                if (model == null)
+                {
+                    diagnostic = new JObject
+                    {
+                        ["code"] = "PatternInstanceResolutionFailed",
+                        ["message"] = "The SDK did not expose a model for the resolved parent object.",
+                        ["objectName"] = obj.Name,
+                        ["objectType"] = obj.TypeDescriptor?.Name,
+                        ["objectGuid"] = obj.Guid.ToString("D")
+                    };
+                    return null;
+                }
+                else
                 {
                     foreach (KBObject child in model.Objects.GetChildren(obj))
                     {
                         if (child != null) children.Add(ToCandidate(child));
                     }
+                    childEnumerationSucceeded = true;
                 }
             }
             catch (Exception ex)
             {
                 Logger.Debug("[PatternResolve] child walk failed for " + obj.Name + ": " + ex.Message);
+                diagnostic = new JObject
+                {
+                    ["code"] = "PatternInstanceResolutionFailed",
+                    ["message"] = "The SDK failed while enumerating pattern instances for the resolved parent object.",
+                    ["objectName"] = obj.Name,
+                    ["objectType"] = obj.TypeDescriptor?.Name,
+                    ["objectGuid"] = obj.Guid.ToString("D"),
+                    ["detail"] = ex.Message
+                };
+                return null;
             }
 
             selection = SelectPatternInstance(requested, children, patternId, registry);
             if (selection.Status != PatternInstanceSelectionStatus.Selected)
             {
                 diagnostic = selection.ToDiagnostic(obj.Name);
+                if (diagnostic == null && childEnumerationSucceeded && selection.Status == PatternInstanceSelectionStatus.NotFound)
+                {
+                    diagnostic = new JObject
+                    {
+                        ["code"] = namedOwnerUnverified ? "PatternInstanceOwnershipUnverified" : "PatternInstanceAbsent",
+                        ["message"] = namedOwnerUnverified
+                            ? "A name-matched pattern object exists, but the SDK did not expose its owning object identity; absence cannot be confirmed."
+                            : "No persisted pattern instance was found for the resolved parent object.",
+                        ["objectName"] = obj.Name,
+                        ["objectType"] = obj.TypeDescriptor?.Name,
+                        ["objectGuid"] = obj.Guid.ToString("D")
+                    };
+                }
                 return null;
             }
 
             var selected = selection.Selected.Candidate;
-            if (fresh) return _objectService?.FindObjectFresh(selected.Name, selected.TypeName);
+            if (fresh && selected.Source is KBObject selectedObject)
+                return _objectService?.FindObjectFreshByIdentity(selectedObject);
             return selected.Source as KBObject;
         }
 
@@ -553,8 +582,47 @@ namespace GxMcp.Worker.Services
 
         public string ReadPatternPartXml(KBObject obj, string partName, Guid? patternId, out KBObject resolvedObject, out string resolvedPartName, out JObject diagnostic)
         {
+            // Some SDK versions attach PatternInstance directly to the typed owner;
+            // inspect that exact object before looking for a companion instance object.
+            var directPart = FindPatternPart(obj, partName);
+            if (directPart != null)
+            {
+                string directXml = ExtractEditablePatternXml(directPart, obj);
+                if (!string.IsNullOrEmpty(directXml))
+                {
+                    resolvedObject = obj;
+                    resolvedPartName = directPart.Name;
+                    diagnostic = null;
+                    return directXml;
+                }
+                resolvedObject = obj;
+                resolvedPartName = directPart.Name;
+                diagnostic = new JObject
+                {
+                    ["code"] = "PatternInstanceReadFailed",
+                    ["message"] = "A PatternInstance part is present on the exact typed owner, but the SDK could not extract its persisted XML.",
+                    ["objectName"] = obj.Name,
+                    ["objectType"] = obj.TypeDescriptor?.Name,
+                    ["objectGuid"] = obj.Guid.ToString("D"),
+                    ["part"] = partName
+                };
+                return null;
+            }
             resolvedObject = ResolvePatternInstance(obj, patternId, fresh: false, out diagnostic);
-            return ReadResolvedPatternPart(resolvedObject, partName, out resolvedPartName);
+            string xml = ReadResolvedPatternPart(resolvedObject, partName, out resolvedPartName);
+            if (resolvedObject != null && string.IsNullOrEmpty(xml) && diagnostic == null)
+                diagnostic = new JObject
+                {
+                    ["code"] = FindPatternPart(resolvedObject, partName) == null ? "PatternInstancePartAbsent" : "PatternInstanceReadFailed",
+                    ["message"] = FindPatternPart(resolvedObject, partName) == null
+                        ? "The resolved pattern instance does not expose the requested part."
+                        : "The SDK could not extract XML from the resolved pattern part.",
+                    ["objectName"] = resolvedObject.Name,
+                    ["objectType"] = resolvedObject.TypeDescriptor?.Name,
+                    ["objectGuid"] = resolvedObject.Guid.ToString("D"),
+                    ["part"] = partName
+                };
+            return xml;
         }
 
         /// <summary>
@@ -569,8 +637,58 @@ namespace GxMcp.Worker.Services
 
         public string ReadPatternPartXmlFresh(KBObject obj, string partName, Guid? patternId, out KBObject resolvedObject, out string resolvedPartName, out JObject diagnostic)
         {
+            var freshOwner = _objectService?.FindObjectFreshByIdentity(obj);
+            if (freshOwner == null)
+            {
+                resolvedObject = null;
+                resolvedPartName = partName;
+                diagnostic = _objectService?.GetLastResolutionDiagnostic() ?? new JObject
+                {
+                    ["code"] = "FreshReadUnavailable",
+                    ["message"] = "The requested parent object could not be re-read by its native identity."
+                };
+                return null;
+            }
+            obj = freshOwner;
+            var directPart = FindPatternPart(obj, partName);
+            if (directPart != null)
+            {
+                string directXml = ExtractEditablePatternXml(directPart, obj);
+                if (!string.IsNullOrEmpty(directXml))
+                {
+                    resolvedObject = obj;
+                    resolvedPartName = directPart.Name;
+                    diagnostic = null;
+                    return directXml;
+                }
+                resolvedObject = obj;
+                resolvedPartName = directPart.Name;
+                diagnostic = new JObject
+                {
+                    ["code"] = "PatternInstanceReadFailed",
+                    ["message"] = "A PatternInstance part is present on the exact typed owner, but the SDK could not extract its persisted XML.",
+                    ["objectName"] = obj.Name,
+                    ["objectType"] = obj.TypeDescriptor?.Name,
+                    ["objectGuid"] = obj.Guid.ToString("D"),
+                    ["part"] = partName
+                };
+                return null;
+            }
             resolvedObject = ResolvePatternInstance(obj, patternId, fresh: true, out diagnostic);
-            return ReadResolvedPatternPart(resolvedObject, partName, out resolvedPartName);
+            string xml = ReadResolvedPatternPart(resolvedObject, partName, out resolvedPartName);
+            if (resolvedObject != null && string.IsNullOrEmpty(xml) && diagnostic == null)
+                diagnostic = new JObject
+                {
+                    ["code"] = FindPatternPart(resolvedObject, partName) == null ? "PatternInstancePartAbsent" : "PatternInstanceReadFailed",
+                    ["message"] = FindPatternPart(resolvedObject, partName) == null
+                        ? "The resolved pattern instance does not expose the requested part."
+                        : "The SDK could not extract XML from the resolved pattern part.",
+                    ["objectName"] = resolvedObject.Name,
+                    ["objectType"] = resolvedObject.TypeDescriptor?.Name,
+                    ["objectGuid"] = resolvedObject.Guid.ToString("D"),
+                    ["part"] = partName
+                };
+            return xml;
         }
 
         private string ReadResolvedPatternPart(KBObject resolvedObject, string partName, out string resolvedPartName)
@@ -621,11 +739,18 @@ namespace GxMcp.Worker.Services
 
         public string BuildPatternPartEnvelope(KBObject obj, string partName, string innerXml, Guid? patternId, out KBObject resolvedObject, out KBObjectPart resolvedPart, out JObject diagnostic)
         {
-            resolvedObject = ResolvePatternInstance(obj, patternId, fresh: false, out diagnostic);
-            resolvedPart = null;
+            // Some SDK versions attach PatternInstance directly to the exact typed
+            // owner. Keep reads and writes on that same native identity instead of
+            // resolving a companion by a potentially ambiguous name.
+            resolvedObject = obj;
+            resolvedPart = FindPatternPart(obj, partName);
+            diagnostic = null;
+            if (resolvedPart == null)
+            {
+                resolvedObject = ResolvePatternInstance(obj, patternId, fresh: false, out diagnostic);
+                if (resolvedObject != null) resolvedPart = FindPatternPart(resolvedObject, partName);
+            }
             if (resolvedObject == null) return null;
-
-            resolvedPart = FindPatternPart(resolvedObject, partName);
             if (resolvedPart == null) return null;
 
             string partXml = SerializeEditablePatternEnvelope(resolvedObject, resolvedPart);

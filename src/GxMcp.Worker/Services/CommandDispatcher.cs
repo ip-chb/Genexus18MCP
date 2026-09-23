@@ -2161,7 +2161,8 @@ namespace GxMcp.Worker.Services
                 return _analyzeService.GetConversionContext(target, args?["include"] as JArray, analyzeType, projection,
                     args?["guid"]?.ToString(), args?["entityKey"]?.ToString(), args?["path"]?.ToString());
             }
-            if (action == "GetPatternMetadata") return _patternAnalysisService.GetWWPStructure(target);
+            if (action == "GetPatternMetadata") return _patternAnalysisService.GetWWPStructure(
+                target, args?["guid"]?.ToString(), args?["entityKey"]?.ToString(), analyzeType, args?["path"]?.ToString());
             if (action == "Summarize") return _summarizeService.Summarize(target, analyzeType);
             if (action == "GetSQL")
             {
@@ -3383,4 +3384,3 @@ namespace GxMcp.Worker.Services
         }
     }
 }
-

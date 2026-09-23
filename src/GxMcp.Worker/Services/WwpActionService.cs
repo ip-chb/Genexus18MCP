@@ -93,6 +93,50 @@ namespace GxMcp.Worker.Services
                 return new PatternSettingsService(_objects).Run(target, args);
             try
             {
+                if (string.Equals((string)args?["action"], "list", StringComparison.OrdinalIgnoreCase)
+                    && (!string.IsNullOrWhiteSpace((string)args?["guid"])
+                        || !string.IsNullOrWhiteSpace((string)args?["entityKey"])))
+                {
+                    // Read-only list accepts the typed parent identity as well as an
+                    // instance identity. Resolve the supplied GUID/EntityKey first;
+                    // never infer the parent through a homonymous object name.
+                    var parent = _objects.FindObject(
+                        target,
+                        guid: (string)args?["guid"],
+                        entityKey: (string)args?["entityKey"]);
+                    string parentType = parent?.TypeDescriptor?.Name;
+                    if (parent != null && (string.Equals(parentType, "Transaction", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(parentType, "WebPanel", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        string parentXml = _patterns.ReadPatternPartXml(parent, "PatternInstance",
+                            PatternRegistry.WorkWithPlusPatternId, out KBObject parentInstance,
+                            out _, out JObject resolutionDiagnostic);
+                        if (parentInstance == null || string.IsNullOrWhiteSpace(parentXml))
+                            return McpResponse.Err(
+                                code: resolutionDiagnostic?["code"]?.ToString() ?? "PatternInstanceResolutionFailed",
+                                message: resolutionDiagnostic?["message"]?.ToString() ?? "The WorkWithPlus PatternInstance could not be resolved for this parent identity.",
+                                hint: resolutionDiagnostic?["hint"]?.ToString() ?? "No action data was read from an object selected by name.",
+                                target: target,
+                                errorExtra: resolutionDiagnostic ?? new JObject
+                                {
+                                    ["parentName"] = parent.Name,
+                                    ["parentType"] = parentType,
+                                    ["parentGuid"] = parent.Guid.ToString("D"),
+                                    ["parentEntityKey"] = parent.Key?.ToString()
+                                });
+
+                        var parentCatalog = Project(XDocument.Parse(parentXml, LoadOptions.PreserveWhitespace));
+                        return McpResponse.Ok(target: target, code: "WwpActionsRead", result: new JObject
+                        {
+                            ["instance"] = parentInstance.Name,
+                            ["instanceGuid"] = parentInstance.Guid.ToString("D"),
+                            ["instanceEntityKey"] = parentInstance.Key?.ToString(),
+                            ["parentGuid"] = parent.Guid.ToString("D"),
+                            ["catalog"] = parentCatalog
+                        });
+                    }
+                }
+
                 KBObject requestedObject = _objects.FindObject(
                     target,
                     typeFilter: "WorkWithPlus",

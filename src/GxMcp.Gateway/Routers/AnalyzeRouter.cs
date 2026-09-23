@@ -61,7 +61,16 @@ namespace GxMcp.Gateway.Routers
                         case "ui_context":
                             return new { module = "UI", action = "GetUIContext", target = target, type = type };
                         case "pattern_metadata":
-                            return new { module = "Analyze", action = "GetPatternMetadata", target = target, type = type };
+                            return new
+                            {
+                                module = "Analyze",
+                                action = "GetPatternMetadata",
+                                target = target,
+                                type = type,
+                                guid = args?["guid"]?.ToString(),
+                                entityKey = args?["entityKey"]?.ToString(),
+                                path = args?["path"]?.ToString()
+                            };
                         case "summary":
                             return new { module = "Analyze", action = "Summarize", target = target, type = type };
                         case "code_metrics":

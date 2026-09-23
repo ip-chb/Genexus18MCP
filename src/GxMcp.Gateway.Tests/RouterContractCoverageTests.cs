@@ -263,6 +263,30 @@ namespace GxMcp.Gateway.Tests
         }
 
         [Fact]
+        public void Pattern_metadata_forwards_native_identity_selectors()
+        {
+            var routed = JObject.FromObject(new AnalyzeRouter().ConvertToolCall(
+                "genexus_analyze",
+                new JObject
+                {
+                    ["mode"] = "pattern_metadata",
+                    ["name"] = "SampleVault",
+                    ["type"] = "Transaction",
+                    ["guid"] = "11111111-1111-4111-8111-111111111111",
+                    ["entityKey"] = "22222222-2222-4222-8222-222222222222-42",
+                    ["path"] = "DemoModule/SampleVault/SampleVault"
+                })!);
+
+            Assert.Equal("Analyze", (string?)routed["module"]);
+            Assert.Equal("GetPatternMetadata", (string?)routed["action"]);
+            Assert.Equal("SampleVault", (string?)routed["target"]);
+            Assert.Equal("Transaction", (string?)routed["type"]);
+            Assert.Equal("11111111-1111-4111-8111-111111111111", (string?)routed["guid"]);
+            Assert.Equal("22222222-2222-4222-8222-222222222222-42", (string?)routed["entityKey"]);
+            Assert.Equal("DemoModule/SampleVault/SampleVault", (string?)routed["path"]);
+        }
+
+        [Fact]
         public void Issue186_published_schemas_declare_routed_parameters_and_alias()
         {
             var tools = JArray.Parse(File.ReadAllText(FindToolDefinitionsJson()));

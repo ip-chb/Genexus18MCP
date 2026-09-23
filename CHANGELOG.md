@@ -33,6 +33,8 @@
 
 - `release.ps1` now checks the live `origin/main` head before snapshotting issues or changing release metadata. It blocks stale or divergent local main branches while preserving retries for a pending release commit directly based on the current remote head.
 
+- PatternInstance reads, metadata, and write-envelope resolution now preserve GUID, EntityKey, type, and path selectors, inspect the exact typed owner before resolving a companion instance, and report confirmed absence separately from SDK/ownership/read failures. Read-only WorkWithPlus listing also accepts a Transaction/WebPanel owner identity and returns that owner's verified instance.
+
 ## v3.8.0 - 2026-09-22
 
 

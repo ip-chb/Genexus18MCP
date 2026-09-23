@@ -3175,6 +3175,39 @@ namespace GxMcp.Worker.Services
             return fresh;
         }
 
+        /// <summary>Re-reads an object by its native identity after invalidating SDK caches.</summary>
+        internal KBObject FindObjectFreshByIdentity(KBObject expected)
+        {
+            _lastResolutionDiagnostic = null;
+            if (expected == null) return null;
+            string guid = expected.Guid.ToString("D");
+            string type = expected.TypeDescriptor?.Name;
+            string entityKey = null;
+            try { entityKey = expected.Key?.ToString(); } catch { }
+            if (!InvalidateCache(expected))
+            {
+                _lastResolutionDiagnostic = new JObject
+                {
+                    ["code"] = "FreshReadUnavailable",
+                    ["message"] = "The SDK object cache could not be invalidated; a verification read was not attempted."
+                };
+                return null;
+            }
+
+            InvalidateAllReadCaches();
+            var fresh = FindObject(null, type, guid, entityKey);
+            if (fresh == null || fresh.Guid != expected.Guid || object.ReferenceEquals(fresh, expected))
+            {
+                _lastResolutionDiagnostic = new JObject
+                {
+                    ["code"] = "FreshReadUnavailable",
+                    ["message"] = "The native identity resolver did not return a fresh instance of the same object."
+                };
+                return null;
+            }
+            return fresh;
+        }
+
         private string FormatReadNotFound(string target)
         {
             var diagnostic = GetLastResolutionDiagnostic();
@@ -4579,6 +4612,16 @@ namespace GxMcp.Worker.Services
                                 errorExtra: freshDiagnostic);
                         }
 
+                        if (!string.IsNullOrWhiteSpace(patternDiagnostic?["code"]?.ToString()))
+                        {
+                            return McpResponse.Err(
+                                code: patternDiagnostic["code"].ToString(),
+                                message: patternDiagnostic["message"]?.ToString() ?? "PatternInstance could not be resolved or read.",
+                                hint: patternDiagnostic["hint"]?.ToString() ?? "The result reflects the exact typed parent identity; no object was selected by homonymous name.",
+                                target: targetName,
+                                errorExtra: patternDiagnostic);
+                        }
+
                         // PatternVirtual fallback: serialise the matching part directly when the pattern analyser bails.
                         try
                         {
@@ -4626,8 +4669,11 @@ namespace GxMcp.Worker.Services
                     if (resolvedObject != null)
                     {
                         patternResult["resolvedObject"] = resolvedObject.Name;
+                        patternResult["resolvedGuid"] = resolvedObject.Guid.ToString("D");
+                        patternResult["resolvedEntityKey"] = resolvedObject.Key?.ToString();
+                        patternResult["resolvedType"] = resolvedObject.TypeDescriptor?.Name;
                         if (resolvedObject.Guid != obj.Guid)
-                            patternResult["resolvedType"] = resolvedObject.TypeDescriptor?.Name;
+                            patternResult["resolvedParentGuid"] = obj.Guid.ToString("D");
                         var resolvedPattern = _patternAnalysisService?.MatchInstancePattern(resolvedObject);
                         if (resolvedPattern != null)
                         {
