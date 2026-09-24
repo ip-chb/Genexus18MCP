@@ -303,7 +303,7 @@ namespace GxMcp.Gateway
                 "HttpPort", "McpStdio", "BindAddress", "AllowedOrigins", "SessionIdleTimeoutMinutes",
                 "WorkerIdleTimeoutMinutes", "WedgedCommandTimeoutMinutes", "WorkerHeapRecycleMB",
                 "ArtifactOutputDirectory", "IdempotencyTtlMinutes", "IdempotencyCacheSize", "BuildSyncThresholdSeconds", "MaxOpenKbs",
-                "ToolProfile", "EmitStructuredContent", "TerseResponses", "WorkerSharingMode"
+                "ToolProfile", "EmitStructuredContent", "TerseResponses", "WorkerSharingMode", "SourceStoreMaxMB"
             }, StringComparer.Ordinal), "Server", path);
             if (server["HttpPort"]?.Type != JTokenType.Integer || server["McpStdio"]?.Type != JTokenType.Boolean)
                 throw new InvalidDataException("Strict config requires typed Server.HttpPort and Server.McpStdio.");
@@ -622,6 +622,11 @@ namespace GxMcp.Gateway
         /// (full UX). Can be forced via GXMCP_TERSE=1 without touching config files.
         /// </summary>
         public bool TerseResponses { get; set; } = false;
+        /// <summary>
+        /// Maximum storage size in MB for the compressed source-store on disk.
+        /// Default: 512 MB.
+        /// </summary>
+        public int SourceStoreMaxMB { get; set; } = 512;
     }
 
     public class LoggingConfig

@@ -2572,6 +2572,17 @@ namespace GxMcp.Worker.Services
             if (!index.Objects.TryGetValue(key, out var current) || current == null) return false;
             if (!string.IsNullOrEmpty(entry.Guid)
                 && !string.Equals(current.Guid, entry.Guid, StringComparison.OrdinalIgnoreCase)) return false;
+
+            if (!string.IsNullOrEmpty(entry.Guid))
+            {
+                SourceStoreService.Instance.Put(
+                    entry.Guid,
+                    ObjectService.ResolveSearchPartName(current.Type),
+                    source,
+                    current.LastUpdate > DateTime.MinValue ? (DateTime?)current.LastUpdate : null,
+                    null);
+            }
+
             long storedChars = 0;
             foreach (var candidate in index.Objects.Values)
             {

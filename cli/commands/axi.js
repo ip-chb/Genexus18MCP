@@ -813,6 +813,57 @@ function buildLegacyIdeLockCheck(gxMajor) {
     return { id: 'legacy_ide_lock', status: 'pass', detail: 'No conflicting GeneXus IDE process (gx.exe) detected.' };
 }
 
+function buildRuntimeStagingCheck() {
+    try {
+        const {
+            resolveDefaultRuntimeRoot,
+            listStagedRuntimes,
+            getRunningGxMcpProcesses,
+            classifyProcessRuntime,
+            shouldStage
+        } = require('../lib/runtime-stager');
+
+        const runtimeRoot = resolveDefaultRuntimeRoot();
+        const stagedList = listStagedRuntimes(runtimeRoot);
+        const runningProcs = getRunningGxMcpProcesses();
+        const npxProcs = runningProcs.filter((p) => classifyProcessRuntime(p.exePath, runtimeRoot) === 'npx-cache');
+        const stagedProcs = runningProcs.filter((p) => classifyProcessRuntime(p.exePath, runtimeRoot) === 'staged');
+
+        if (npxProcs.length > 0) {
+            return {
+                id: 'runtime_staging',
+                status: 'warn',
+                detail: `${npxProcs.length} process(es) running directly from npx cache (PIDs: ${npxProcs.map((p) => p.pid).join(', ')}). Terminate them to prevent EBUSY during upgrades.`
+            };
+        }
+        if (shouldStage()) {
+            return {
+                id: 'runtime_staging',
+                status: 'pass',
+                detail: `Staging active at ${runtimeRoot}. ${stagedList.length} staged version(s) found, ${stagedProcs.length} active process(es).`
+            };
+        }
+        if (process.env.GENEXUS_MCP_GATEWAY_EXE) {
+            return {
+                id: 'runtime_staging',
+                status: 'pass',
+                detail: `Fixed-path runtime override active via GENEXUS_MCP_GATEWAY_EXE (${process.env.GENEXUS_MCP_GATEWAY_EXE}). Staging bypassed.`
+            };
+        }
+        return {
+            id: 'runtime_staging',
+            status: 'pass',
+            detail: 'Development checkout active. Runtime staging bypassed.'
+        };
+    } catch {
+        return {
+            id: 'runtime_staging',
+            status: 'not_applicable',
+            detail: 'Runtime staging inspection unavailable.'
+        };
+    }
+}
+
 function redactConfig(cfg) {
     // Replace absolute paths with `<redacted:hash8>` so the structure is preserved
     // but filesystem layout, usernames, and KB names are not leaked. Hash is stable
@@ -1124,6 +1175,7 @@ async function handleDoctor(options, ctx) {
     checks.push({ id: 'gxpublic_com_registration', status: comCheck.status, detail: comCheck.detail });
     const ideLockCheck = buildLegacyIdeLockCheck(gxMajor);
     checks.push({ id: 'legacy_ide_lock', status: ideLockCheck.status, detail: ideLockCheck.detail });
+    checks.push(buildRuntimeStagingCheck());
 
     // Client registration summary — one line answering "are my AI agents wired up?".
     const installedRows = clientRows.filter((r) => r.installed);

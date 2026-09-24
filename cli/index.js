@@ -450,7 +450,16 @@ async function launchGateway(passthroughArgs, options) {
         return EXIT_CODES.ERROR;
     }
 
-    const gatewayExePath = getGatewayExePath();
+    let gatewayExePath = getGatewayExePath();
+    try {
+        const { ensureStagedGateway } = require('./lib/runtime-stager');
+        const staged = ensureStagedGateway();
+        gatewayExePath = staged.gatewayExePath;
+    } catch (stageErr) {
+        if (!options.quiet) {
+            launcherStderr.write(`[genexus-mcp] Warning: Runtime staging failed (${stageErr.message}), falling back to direct binary.\n`);
+        }
+    }
     if (!require('fs').existsSync(gatewayExePath)) {
         const message = `[genexus-mcp] ERROR: Gateway executable not found at ${gatewayExePath}`;
         launcherStderr.write(`${message}\n`);

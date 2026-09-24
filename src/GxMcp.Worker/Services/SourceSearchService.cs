@@ -455,11 +455,54 @@ namespace GxMcp.Worker.Services
                 bool sourcePageStoppedInsideEntry = false;
                 int sourceNextEntry = -1;
                 int sourceNextSkip = 0;
+
+                var coverage = SourceStoreService.Instance.GetCoverage(entries, c.Scope ?? DefaultScope);
+                var storedFreshGuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                if (coverage.StoredObjects > 0 && startIndex == 0 && string.IsNullOrWhiteSpace(c.Cursor))
+                {
+                    var storedEntries = new List<Models.SearchIndex.IndexEntry>();
+                    foreach (var entry in entries)
+                    {
+                        if (SourceStoreService.Instance.IsStoredAndFresh(entry, c.Scope ?? DefaultScope))
+                        {
+                            storedEntries.Add(entry);
+                            if (!string.IsNullOrEmpty(entry.Guid))
+                            {
+                                storedFreshGuids.Add(entry.Guid);
+                            }
+                        }
+                    }
+
+                    if (storedEntries.Count > 0)
+                    {
+                        var storeHits = SourceStoreService.Instance.SearchStore(storedEntries, c, rx, ct);
+                        foreach (var hit in storeHits)
+                        {
+                            hits.Add(hit);
+                            produced++;
+                            if (produced >= c.MaxResults) break;
+                        }
+                        scanned += storedEntries.Count;
+                    }
+                }
+
                 for (cursor = startIndex; cursor < entries.Count; cursor++)
                 {
                     if (resumeMetadata) break;
                     var e = entries[cursor];
                     if (produced >= c.MaxResults) break;
+
+                    if (!string.IsNullOrEmpty(e.Guid) && storedFreshGuids.Contains(e.Guid))
+                    {
+                        continue;
+                    }
+
+                    // Cooperative STA slicing (Issue #293): drain pending interactive (P0) commands
+                    if (StaScheduler.Instance.HasPendingInteractive)
+                    {
+                        StaScheduler.Instance.DrainPendingInteractive(Program.ProcessScheduledCommand);
+                    }
                     int skippedHits = resumeEntry == cursor ? resumeSkipped : 0;
                     int consumedHits = skippedHits;
                     bool entryReachedLimit = false;
@@ -470,6 +513,12 @@ namespace GxMcp.Worker.Services
                             ["partialHits"] = hits,
                             ["totalScanned"] = scanned,
                             ["totalObjects"] = entries.Count,
+                            ["coverage"] = new JObject
+                            {
+                                ["storedObjects"] = coverage.StoredObjects,
+                                ["staleObjects"] = coverage.StaleObjects,
+                                ["totalObjects"] = entries.Count
+                            },
                             ["nextCursor"] = BuildResumeCursor(cursor, 0, metadata: false),
                             ["nextOffset"] = cursor,
                             ["resumeHint"] = "Pass cursor=nextCursor to resume this scan; legacy callers may pass startIndex=nextOffset."
@@ -484,6 +533,12 @@ namespace GxMcp.Worker.Services
                             ["totalScanned"] = scanned,
                             ["totalObjects"] = entries.Count,
                             ["coveragePercent"] = pct,
+                            ["coverage"] = new JObject
+                            {
+                                ["storedObjects"] = coverage.StoredObjects,
+                                ["staleObjects"] = coverage.StaleObjects,
+                                ["totalObjects"] = entries.Count
+                            },
                             ["timeoutMs"] = timeoutMs,
                             ["nextCursor"] = BuildResumeCursor(cursor, 0, metadata: false),
                             ["nextOffset"] = cursor,
@@ -557,6 +612,15 @@ namespace GxMcp.Worker.Services
                         if (haveSrc && indexedSourceScope && IsSourceAlias(part) && e.FullSource == null)
                         {
                             if (_index.PromoteSourceForSearch(e, src)) sourceIndexPromotions++;
+                        }
+                        if (haveSrc && !string.IsNullOrEmpty(e.Guid))
+                        {
+                            SourceStoreService.Instance.Put(
+                                e.Guid,
+                                resolvedPart,
+                                src,
+                                e.LastUpdate > DateTime.MinValue ? (DateTime?)e.LastUpdate : null,
+                                null);
                         }
                         if (string.IsNullOrEmpty(src)) continue;
 
@@ -791,6 +855,12 @@ namespace GxMcp.Worker.Services
                     ["partial"] = partialIndex,
                     ["scannedObjects"] = scanned,
                     ["totalObjects"] = entries.Count,
+                    ["coverage"] = new JObject
+                    {
+                        ["storedObjects"] = coverage.StoredObjects,
+                        ["staleObjects"] = coverage.StaleObjects,
+                        ["totalObjects"] = entries.Count
+                    },
                     // v2.8.0: canonical pagination block — total is now the scoped object count.
                     ["pagination"] = new JObject
                     {

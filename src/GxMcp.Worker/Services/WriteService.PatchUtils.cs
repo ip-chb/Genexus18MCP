@@ -262,6 +262,14 @@ namespace GxMcp.Worker.Services
                     ["reReadConfirmed"] = true,
                     ["versionToken"] = finalVersionToken
                 };
+                if (!isDryRun && !string.IsNullOrEmpty(finalSource))
+                {
+                    string targetGuid = parsed["guid"]?.ToString() ?? parsed["result"]?["guid"]?.ToString();
+                    if (!string.IsNullOrEmpty(targetGuid))
+                    {
+                        SourceStoreService.Instance.Put(targetGuid, partName, finalSource, DateTime.UtcNow, finalVersionToken);
+                    }
+                }
             }
             else
             {

@@ -56,5 +56,21 @@ namespace GxMcp.Worker
         // are filled in on demand via EnrichmentQueue.PromoteAsync when a tool needs a target.
         // Set Indexing.LazyEnrichment=false to restore the eager full-KB enrichment drain.
         public static bool LazyEnrichment => BoolSetting("Indexing.LazyEnrichment");
+
+        public static int SourceStoreMaxMB
+        {
+            get
+            {
+                var env = Environment.GetEnvironmentVariable("GXMCP_SOURCE_STORE_MAX_MB");
+                if (int.TryParse(env, out int envMb) && envMb > 0) return envMb;
+                try
+                {
+                    var raw = ConfigurationManager.AppSettings["Server.SourceStoreMaxMB"];
+                    if (int.TryParse(raw, out int cfgMb) && cfgMb > 0) return cfgMb;
+                }
+                catch { }
+                return 512;
+            }
+        }
     }
 }

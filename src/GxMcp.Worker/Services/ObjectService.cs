@@ -3937,7 +3937,7 @@ namespace GxMcp.Worker.Services
             return TryGetFullReadSourceCache(normalizedGuid, normalizedPart, out src);
         }
 
-        private static string NormalizeRawSourcePart(string partName)
+        internal static string NormalizeRawSourcePart(string partName)
         {
             return string.IsNullOrWhiteSpace(partName) ? "source" : partName.Trim().ToLowerInvariant();
         }
@@ -4892,7 +4892,7 @@ namespace GxMcp.Worker.Services
                 normalizedClient + (minimize ? "|1" : "|0"));
         }
 
-        private static bool TryGetReadCache(string key, out string payload)
+        internal static bool TryGetReadCache(string key, out string payload)
         {
             payload = string.Empty;
             if (string.IsNullOrWhiteSpace(key))
@@ -5067,6 +5067,12 @@ namespace GxMcp.Worker.Services
 
             string guid = objectGuid.ToString();
             SearchIndex.IndexEntry entry = index.FindByGuid(guid);
+            SourceStoreService.Instance.Put(
+                guid,
+                NormalizeRawSourcePart(partName),
+                source,
+                entry != null && entry.LastUpdate > DateTime.MinValue ? (DateTime?)entry.LastUpdate : null,
+                null);
             return entry != null
                 && string.Equals(NormalizeRawSourcePart(partName), ResolveSearchPartName(entry.Type), StringComparison.OrdinalIgnoreCase)
                 && indexCache.PromoteSourceForSearch(entry, source);

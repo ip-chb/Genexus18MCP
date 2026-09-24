@@ -32,7 +32,7 @@
     "automation"
   ],
   "scripts": {
-    "test": "node --test cli/run.test.js cli/lib/client-adapters.test.js cli/docs.test.js scripts/lint.test.js scripts/verify-install.test.js && npm run test:live-contract",
+    "test": "node --test cli/run.test.js cli/lib/client-adapters.test.js cli/lib/runtime-stager.test.js cli/docs.test.js scripts/lint.test.js scripts/verify-install.test.js && npm run test:live-contract",
     "lint": "node scripts/lint.js",
     "test:live-contract": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/tests/test-live.test.ps1",
     "test:integration": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/integration-preflight.ps1",

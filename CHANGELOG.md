@@ -2,8 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- Run the Gateway and Worker from a staged, versioned runtime directory (`%LOCALAPPDATA%\GenexusMCP\runtimes\<version>\`) instead of executing directly inside the npm cache, preventing `EBUSY` file locking errors during npm/npx upgrades. Added runtime staging manager, manifest integrity verification, automated cleanup of stale version folders, and doctor diagnostics for runtime classification. ([#294](https://github.com/lennix1337/Genexus18MCP/issues/294), [#297](https://github.com/lennix1337/Genexus18MCP/issues/297))
+
 ### Changed
 
+- STA thread command scheduling now uses a prioritized, cooperative scheduler (`StaScheduler`) supporting P0 interactive reads/inspects, P1 normal writes, and P2 background scans with bounded configurable waits (`GXMCP_BUSY_WAIT_MS` / `busyWaitMs`) instead of immediate `WorkerBusy` rejections. Long-running operations like source searches cooperatively yield STA slices to drain interactive commands, and cache-backed read-through serves reads off-STA during unsliceable builds. ([#293](https://github.com/lennix1337/Genexus18MCP/issues/293), [#297](https://github.com/lennix1337/Genexus18MCP/issues/297))
+- Unscoped source search now queries an off-STA persistent compressed source store (`SourceStoreService`) with trigram indexing (`TrigramExtractor`) instead of falling back to an 8 MiB-capped scan. Unscoped searches evaluate candidate documents in parallel across stored records without touching the single-threaded SDK, falling back only for unindexed/stale objects, and writes/reads automatically write through to maintain store coverage. ([#292](https://github.com/lennix1337/Genexus18MCP/issues/292), [#297](https://github.com/lennix1337/Genexus18MCP/issues/297))
 - `genexus_lifecycle action=specify wait_until_done=true` now uses the Gateway operation registry and long-polls to a terminal result in one call (or returns the running `operationId` at the wait cap). ([#291](https://github.com/lennix1337/Genexus18MCP/issues/291))
 - Documented the internal `GXMCP_SHARED_CHILD` marker and its shared-worker `ping`/readiness behavior, plus the driver/major and GXPublic provider variable provenance and precedence ([#284](https://github.com/lennix1337/Genexus18MCP/issues/284), [#299](https://github.com/lennix1337/Genexus18MCP/issues/299)).
 - New neutral CLI configurations default to the `standard` tool profile. `tools/list` now uses compact schemas with full descriptions and examples available from tool-help resources; profile budgets and actionable `ToolNotInProfile` errors make the remaining profiles discoverable. ([#296](https://github.com/lennix1337/Genexus18MCP/issues/296))

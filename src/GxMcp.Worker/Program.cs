@@ -107,12 +107,20 @@ namespace GxMcp.Worker
         {
             bool active = _sdkBusy == 1;
             long sinceTicks = Interlocked.Read(ref _sdkBusySinceTicks);
+            var (p0, p1, p2, total) = StaScheduler.Instance.GetQueueDepths();
             var status = new JObject
             {
                 ["active"] = active,
                 ["operation"] = active ? _sdkBusyOp : null,
                 ["operationId"] = active ? _sdkBusyOperationId : null,
-                ["elapsedMs"] = 0
+                ["elapsedMs"] = 0,
+                ["queueDepths"] = new JObject
+                {
+                    ["p0"] = p0,
+                    ["p1"] = p1,
+                    ["p2"] = p2,
+                    ["total"] = total
+                }
             };
             if (active && sinceTicks > 0)
             {
@@ -597,12 +605,27 @@ namespace GxMcp.Worker
 
         private static bool EnqueueSdkCommand(JObject obj, string line)
         {
-            var item = new SdkCommandItem { Obj = obj, RawLine = line };
-            if (!SdkCommandQueue.TryAdd(item))
+            var priority = GxMcp.Worker.Services.StaScheduler.ResolvePriority(obj, line);
+            int busyWaitMs = GxMcp.Worker.Services.StaScheduler.ResolveBusyWaitMs(obj);
+            string clientId = GxMcp.Worker.Services.StaScheduler.ResolveClientId(obj);
+            string idJson = obj?["id"]?.ToString() ?? "null";
+            string method = obj?["method"]?.ToString()?.ToLowerInvariant();
+            string action = (obj?["action"]?.ToString() ?? obj?["params"]?["action"]?.ToString())?.ToLowerInvariant();
+
+            var item = new GxMcp.Worker.Services.ScheduledCommandItem
             {
-                SendQueueBusy(line, "SDK command queue");
-                return false;
-            }
+                Obj = obj,
+                RawLine = line,
+                Priority = priority,
+                ClientId = clientId,
+                EnqueuedAtUtc = DateTime.UtcNow,
+                BusyWaitMs = busyWaitMs,
+                IdJson = idJson,
+                Method = method,
+                Action = action
+            };
+
+            GxMcp.Worker.Services.StaScheduler.Instance.Enqueue(item);
             try
             {
                 if (_bridgeForm != null && _bridgeForm.IsHandleCreated)
@@ -615,6 +638,22 @@ namespace GxMcp.Worker
         }
 
         private static bool EnqueueSdkCommand(string line) => EnqueueSdkCommand(null, line);
+
+        internal static void ProcessScheduledCommand(GxMcp.Worker.Services.ScheduledCommandItem item)
+        {
+            if (item == null) return;
+            try
+            {
+                if (item.Obj != null)
+                    ProcessCommand(item.Obj, item.RawLine);
+                else
+                    ProcessCommand(item.RawLine);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ProcessScheduledCommand Error: " + ex.Message);
+            }
+        }
 
         private static void SendQueueBusy(string line, string queueName)
         {
@@ -643,22 +682,45 @@ namespace GxMcp.Worker
             // SDK Save may pump the STA message loop. A nested command or
             // background job must not run inside another operation's broker scope.
             if (GxMcp.Worker.Helpers.SdkEventSuppressionScope.IsActive) return;
-            while (SdkCommandQueue.TryTake(out SdkCommandItem item))
+
+            while (GxMcp.Worker.Services.StaScheduler.Instance.TryTakeNext(out var item))
             {
+                double ageMs = (DateTime.UtcNow - item.EnqueuedAtUtc).TotalMilliseconds;
+                if (item.BusyWaitMs > 0 && ageMs > item.BusyWaitMs)
+                {
+                    SendWorkerBusy(item.Obj, item.RawLine, ageMs);
+                    continue;
+                }
+
                 Interlocked.Exchange(ref _sdkBusySinceTicks, DateTime.UtcNow.Ticks);
                 _sdkBusyOp = DescribeCommand(item.Obj, item.RawLine);
                 _sdkBusyOperationId = ExtractOperationId(item.Obj, item.RawLine);
                 _sdkBusy = 1;
                 try
                 {
-                    if (item.Obj != null)
-                        ProcessCommand(item.Obj, item.RawLine);
-                    else
-                        ProcessCommand(item.RawLine);
+                    ProcessScheduledCommand(item);
                 }
                 catch (Exception ex) { Logger.Error("SDK Command Error: " + ex.Message); }
                 finally { _sdkBusy = 0; _sdkBusyOp = null; _sdkBusyOperationId = null; }
             }
+
+            while (SdkCommandQueue.TryTake(out SdkCommandItem legacyItem))
+            {
+                Interlocked.Exchange(ref _sdkBusySinceTicks, DateTime.UtcNow.Ticks);
+                _sdkBusyOp = DescribeCommand(legacyItem.Obj, legacyItem.RawLine);
+                _sdkBusyOperationId = ExtractOperationId(legacyItem.Obj, legacyItem.RawLine);
+                _sdkBusy = 1;
+                try
+                {
+                    if (legacyItem.Obj != null)
+                        ProcessCommand(legacyItem.Obj, legacyItem.RawLine);
+                    else
+                        ProcessCommand(legacyItem.RawLine);
+                }
+                catch (Exception ex) { Logger.Error("SDK Command Error: " + ex.Message); }
+                finally { _sdkBusy = 0; _sdkBusyOp = null; _sdkBusyOperationId = null; }
+            }
+
             while (SdkActionQueue.TryTake(out var job))
             {
                 try { job(); }
@@ -996,9 +1058,100 @@ namespace GxMcp.Worker
         // gateway time out with a misleading "Gateway timeout starting build"). Control/recovery
         // commands are never rejected so a wedged worker stays recoverable. Returns true when it
         // handled (answered) the command.
+        private static void SendWorkerBusy(JObject o, string line, double ageMs)
+        {
+            string idJson = "null";
+            try
+            {
+                if (o == null && !string.IsNullOrEmpty(line)) o = GxMcp.Common.JsonIngress.ParseObject(line);
+                idJson = o?["id"]?.ToString() ?? "null";
+            }
+            catch { }
+
+            string busy = GxMcp.Worker.Models.McpResponse.Err(
+                code: "WorkerBusy",
+                message: "The worker is executing a long-running SDK operation (" + (_sdkBusyOp ?? "unknown")
+                       + ", running " + Math.Round(ageMs / 1000.0, 1) + "s) and runs SDK commands one at a time. The bounded wait expired.",
+                hint: "The GeneXus model is single-threaded — only one SDK operation runs at a time. You can tune busyWaitMs per command or via GXMCP_BUSY_WAIT_MS.",
+                retryAfterMs: Math.Max(1000, _busyRejectThresholdMs),
+                errorExtra: new JObject
+                {
+                    ["blockingOperationId"] = _sdkBusyOperationId,
+                    ["blockingOperation"] = _sdkBusyOp,
+                    ["elapsedMs"] = Math.Max(0L, (long)ageMs)
+                });
+            SendResponse(busy, idJson);
+            Logger.Warn("[BUSY-EXPIRED] " + DescribeCommand(o, line) + " id=" + idJson
+                + " — wait expired while SDK thread was busy with " + (_sdkBusyOp ?? "?") + " for " + Math.Round(ageMs) + "ms");
+        }
+
+        private static bool TryServeCachedReadThrough(JObject obj, string line)
+        {
+            if (_sdkBusy != 1) return false;
+            string busyOp = _sdkBusyOp;
+            if (string.IsNullOrEmpty(busyOp)) return false;
+            bool isUnsliceableBuild = busyOp.IndexOf("build", StringComparison.OrdinalIgnoreCase) >= 0
+                                   || busyOp.IndexOf("specify", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!isUnsliceableBuild) return false;
+
+            if (obj == null && !string.IsNullOrEmpty(line))
+            {
+                try { obj = GxMcp.Common.JsonIngress.ParseObject(line); } catch { return false; }
+            }
+            if (obj == null) return false;
+
+            string method = obj["method"]?.ToString()?.ToLowerInvariant();
+            string action = (obj["action"]?.ToString() ?? obj["params"]?["action"]?.ToString())?.ToLowerInvariant();
+            if (method != "object" || action != "extractsource") return false;
+
+            string target = obj["params"]?["target"]?.ToString() ?? obj["params"]?["name"]?.ToString();
+            string part = obj["params"]?["part"]?.ToString() ?? "Source";
+            int? offset = obj["params"]?["offset"]?.ToObject<int?>();
+            int? limit = obj["params"]?["limit"]?.ToObject<int?>();
+
+            if (string.IsNullOrEmpty(target)) return false;
+
+            var entries = _dispatcher?.GetIndexCacheService()?.GetIndex()?.FindByName(target);
+            var entry = entries != null && entries.Count > 0 ? entries[0] : null;
+            if (entry != null && Guid.TryParse(entry.Guid, out var guid))
+            {
+                string cacheKey = ObjectService.BuildReadCacheKey(guid, part, offset, limit, "mcp", false);
+                if (ObjectService.TryGetReadCache(cacheKey, out string payload))
+                {
+                    try
+                    {
+                        var resObj = GxMcp.Common.JsonIngress.ParseObject(payload);
+                        var meta = resObj["_meta"] as JObject ?? new JObject();
+                        meta["servedFrom"] = "cache";
+                        if (resObj["versionToken"] != null)
+                            meta["cachedVersionToken"] = resObj["versionToken"].ToString();
+                        meta["concurrentOperation"] = busyOp;
+                        resObj["_meta"] = meta;
+
+                        string idJson = obj["id"]?.ToString() ?? "null";
+                        SendResponse(resObj.ToString(Newtonsoft.Json.Formatting.None), idJson);
+                        Logger.Info($"[READ-THROUGH] Served cached read for {target} ({part}) off-STA during {busyOp}");
+                        return true;
+                    }
+                    catch { return false; }
+                }
+            }
+            return false;
+        }
+
         private static bool TryRejectBusy(JObject o, string line)
         {
             if (_sdkBusy != 1) return false;
+
+            // Check if read-through from cache can answer this immediately off-STA
+            if (TryServeCachedReadThrough(o, line))
+                return true;
+
+            var priority = GxMcp.Worker.Services.StaScheduler.ResolvePriority(o, line);
+            // P0 (interactive) and P1 (normal) commands are NOT instantly rejected; they enter StaScheduler with bounded wait!
+            if (priority == GxMcp.Worker.Services.CommandPriority.P0_Interactive ||
+                priority == GxMcp.Worker.Services.CommandPriority.P1_Normal)
+                return false;
 
             long sinceTicks = Interlocked.Read(ref _sdkBusySinceTicks);
             double ageMs = (DateTime.UtcNow - new DateTime(sinceTicks, DateTimeKind.Utc)).TotalMilliseconds;
