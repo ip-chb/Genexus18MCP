@@ -10,6 +10,7 @@ namespace GxMcp.Worker.Tests
     /// the already-disposed Process instance in BuildService's guaranteed-cleanup
     /// finally block. These cover the no-op paths and the real reap path.
     /// </summary>
+    [Trait("Category", "ProcessSmoke")]
     public class BuildReapByPidTests
     {
         [Fact]

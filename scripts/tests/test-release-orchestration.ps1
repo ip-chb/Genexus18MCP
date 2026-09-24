@@ -70,7 +70,7 @@ try {
     $statusStartIndex = $releaseSource.IndexOf("Write-ReleaseStatus -Phase 'starting'", [StringComparison]::Ordinal)
     $tagInitIndex = $releaseSource.IndexOf('$tag = $null', [StringComparison]::Ordinal)
     if ($statusStartIndex -lt 0 -or $tagInitIndex -lt 0 -or $tagInitIndex -gt $statusStartIndex) { throw 'Release status must initialize the tag before the first status write.' }
-    foreach ($marker in @('CloseIssuesFile', 'Get-ReleaseIssueNumbers', 'Get-LabeledReleaseIssues', 'release-issues.txt', 'release-issues.json', 'gh api --paginate', 'repos/{owner}/{repo}/issues/$issue', 'per_page=100', 'OutputEncoding', 'Console]::OutputEncoding', 'ReleaseMilestone', 'Tracked issues', 'deduplicated', 'SkipLabeledIssues', 'hasTrackedIssuesInUnreleased', 'release-issues.ps1', 'Get-ReleaseIssueData', 'Assert-ReleaseIssueAction', 'CloseAfterRelease', 'issues = [ordered]', 'ToUpperInvariant()', '$CloseIssues = @(', 'foreach ($issueNumber in @($explicitIssues))', 'foreach ($issueNumber in @($labeledIssues))', 'Get-ReleaseArtifactFingerprint', 'preflightSummaryPath', 'ResumeSummaryPath', 'warning baseline is included in the complete preflight')) {
+    foreach ($marker in @('CloseIssuesFile', 'Get-ReleaseIssueNumbers', 'Get-LabeledReleaseIssues', 'release-issues.txt', 'release-issues.json', 'gh api --paginate', 'repos/{owner}/{repo}/issues/$issue', 'per_page=100', 'OutputEncoding', 'Console]::OutputEncoding', 'ReleaseMilestone', 'Tracked issues', 'deduplicated', 'SkipLabeledIssues', 'hasTrackedIssuesInUnreleased', 'release-issues.ps1', 'Get-ReleaseIssueData', 'Assert-ReleaseIssueAction', 'CloseAfterRelease', 'issues = [ordered]', 'ToUpperInvariant()', '$CloseIssues = @(', 'foreach ($issueNumber in @($explicitIssues))', 'foreach ($issueNumber in @($labeledIssues))', 'Get-GxMcpReleaseArtifactFingerprint', 'Get-ReleasePreflightInputs', 'Test-GxMcpReleasePreflightCertificate', 'Get-GxMcpReleaseAssetVerification', 'release-contract.ps1', 'verify-release-manifest.py', '--archive', 'remoteAssetsNeedRepair', 'Test-ReleaseIssuePublicationComment', 'Test-ReleaseIssuePublicationComment -IssueData $commented', 'existing snapshot header does not match', 'preflightSummaryPath', 'ResumeSummaryPath', 'warning baseline is included in the complete preflight')) {
         if ($releaseSource -notmatch [regex]::Escape($marker)) { throw "Release issue batch support is missing: $marker" }
     }
 
@@ -98,6 +98,29 @@ try {
     if (Test-ReleaseBaseAlignment -LocalHead $releaseHead -RemoteMainHead $remoteMainHead -LocalParent $remoteMainHead -LocalSubject 'release: v3.8.0' -Tag 'v3.8.1') {
         throw 'A release commit for another version must not be treated as resumable.'
     }
+    $vsixFunctionNames = @('Get-ReleaseFileSha256', 'Ensure-ReleaseVsixArtifacts')
+    foreach ($name in $vsixFunctionNames) {
+        $definition = $releaseAst.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
+        if (-not $definition) { throw "Missing production VSIX reconciliation function: $name" }
+        . ([scriptblock]::Create($definition.Extent.Text))
+    }
+    $vsixRoot = Join-Path $temp 'nexus-ide-3.0.1.vsix'
+    $vsixPublishDir = Join-Path $temp 'vsix-publish'
+    $vsixPublish = Join-Path $vsixPublishDir 'nexus-ide.vsix'
+    New-Item -ItemType Directory -Path $vsixPublishDir -Force | Out-Null
+    Set-Content -LiteralPath $vsixRoot -Value 'root-vsix' -Encoding ascii
+    Ensure-ReleaseVsixArtifacts -PublishDirectory $vsixPublishDir -VsixPath $vsixRoot
+    if (-not (Test-Path -LiteralPath $vsixPublish)) { throw 'Skip-build reconciliation did not populate publish/nexus-ide.vsix.' }
+    Remove-Item -LiteralPath $vsixRoot -Force
+    Ensure-ReleaseVsixArtifacts -PublishDirectory $vsixPublishDir -VsixPath $vsixRoot
+    if ((Get-ReleaseFileSha256 -Path $vsixRoot) -ne (Get-ReleaseFileSha256 -Path $vsixPublish)) { throw 'Skip-build reconciliation did not restore the root VSIX from publish.' }
+    Set-Content -LiteralPath $vsixRoot -Value 'different-root' -Encoding ascii
+    $mismatchRejected = $false
+    try { Ensure-ReleaseVsixArtifacts -PublishDirectory $vsixPublishDir -VsixPath $vsixRoot } catch { $mismatchRejected = $true }
+    if (-not $mismatchRejected) { throw 'Mismatched root/publish VSIX artifacts were accepted.' }
+    Remove-Item -LiteralPath $vsixPublish, $vsixRoot -Force -ErrorAction SilentlyContinue
+    Ensure-ReleaseVsixArtifacts -PublishDirectory $vsixPublishDir -VsixPath $vsixRoot -AllowMissing
+    if (Test-Path -LiteralPath $vsixPublish) { throw 'Legacy missing-VSIX reconciliation unexpectedly created an artifact.' }
     $issueFunction = $releaseAst.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-ReleaseIssueNumbers' }, $true)
     if (-not $issueFunction) { throw 'Missing Get-ReleaseIssueNumbers production function.' }
     . ([scriptblock]::Create($issueFunction.Extent.Text))

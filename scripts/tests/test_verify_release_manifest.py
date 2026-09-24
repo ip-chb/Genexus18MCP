@@ -1,11 +1,13 @@
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import re
 import unittest
+import zipfile
 from pathlib import Path
 
 
@@ -78,7 +80,54 @@ class ReleaseManifestTests(unittest.TestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
-    def test_working_tree_provenance_is_rejected(self):
+    def test_archive_must_match_staged_publish_bytes(self):
+        root = self._fixture()
+        archive_fd, archive_name = tempfile.mkstemp(prefix="gxmcp-manifest-archive-", suffix=".zip")
+        os.close(archive_fd)
+        archive_path = Path(archive_name)
+        try:
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                for path in sorted(p for p in root.rglob("*") if p.is_file()):
+                    archive.write(path, path.relative_to(root).as_posix())
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    str(root),
+                    "--version",
+                    "3.0.0-rc.1",
+                    "--archive",
+                    str(archive_path),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIn("archive=", result.stdout)
+
+            (root / "tool_definitions.json").write_text("[1]", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    str(root),
+                    "--version",
+                    "3.0.0-rc.1",
+                    "--archive",
+                    str(archive_path),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertRegex(result.stderr, r"(size mismatch|SHA-256 mismatch|file set differs)")
+        finally:
+            archive_path.unlink(missing_ok=True)
+            shutil.rmtree(root, ignore_errors=True)
+
+
         root = self._fixture()
         try:
             manifest_path = root / "gxmcp-manifest.json"

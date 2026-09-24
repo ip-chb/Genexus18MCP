@@ -10,6 +10,7 @@ namespace GxMcp.Gateway.Tests
     // NEW/CHANGED inventory or the explicit stable NotSupported envelope when
     // the installed SDK does not expose the versioned model view.
     [Trait("Category", "LiveIssue")]
+    [Trait("Category", "ProcessSmoke")]
     public sealed class Issue241LiveTests : IClassFixture<LiveGatewayHarness>, IAsyncLifetime
     {
         private readonly LiveGatewayHarness _harness;

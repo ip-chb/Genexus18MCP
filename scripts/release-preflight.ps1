@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$GxPath,
     [string[]]$LiveMajors,
@@ -19,79 +19,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $root 'scripts\gx-version-catalog.ps1')
+. (Join-Path $root 'scripts\release-contract.ps1')
 $gxCatalog = Get-GxVersionCatalog -Root $root
-
-function Get-LocalLiveKbPath {
-    param(
-        [Parameter(Mandatory = $true)][object]$Catalog,
-        [string]$GxPath,
-        [string]$KbRoot = 'C:/KBs'
-    )
-
-    $major = [string]$Catalog.primaryMajor
-    if (-not [string]::IsNullOrWhiteSpace($GxPath)) {
-        try {
-            $normalizedGxPath = ([IO.Path]::GetFullPath($GxPath)).TrimEnd('\', '/')
-            foreach ($entry in @($Catalog.supportedMajors)) {
-                if ([string]::IsNullOrWhiteSpace([string]$entry.defaultInstallPath)) { continue }
-                $normalizedDefault = ([IO.Path]::GetFullPath([string]$entry.defaultInstallPath)).TrimEnd('\', '/')
-                if ([string]::Equals($normalizedGxPath, $normalizedDefault, [StringComparison]::OrdinalIgnoreCase)) {
-                    $major = [string]$entry.major
-                    break
-                }
-            }
-        } catch { }
-        $leaf = Split-Path -Leaf $GxPath
-        if ($leaf -match '^GeneXus(?<major>\d+)') { $major = $Matches.major }
-    }
-
-    $fixtureName = switch ($major) {
-        '17' { 'KBTeste17'; break }
-        '18' { 'KBTeste'; break }
-        default { "KBTeste$major"; break }
-    }
-    $candidate = Join-Path $KbRoot $fixtureName
-    if (-not (Test-Path -LiteralPath $candidate -PathType Container)) { return $null }
-    [pscustomobject]@{
-        path = (Resolve-Path -LiteralPath $candidate).Path
-        major = $major
-        source = 'auto-local'
-    }
-}
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = (Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version
 }
 if ([string]::IsNullOrWhiteSpace($GxPath)) {
     $GxPath = if (-not [string]::IsNullOrWhiteSpace($env:GX_PATH)) { $env:GX_PATH } else { Get-GxPrimaryInstallPath -Catalog $gxCatalog }
-}
-if (@($LiveMajors | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($env:GXMCP_LIVE_MAJORS)) {
-    $LiveMajors = @($env:GXMCP_LIVE_MAJORS -split '[,;\s]+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-}
-if (@($LiveGxPathMap | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($env:GXMCP_LIVE_GX_PATH_MAP)) {
-    $LiveGxPathMap = @($env:GXMCP_LIVE_GX_PATH_MAP -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-}
-if (-not $RequireBuildAll -and $env:GXMCP_REQUIRE_LIVE_BUILD_ALL -eq '1') { $RequireBuildAll = $true }
-
-$liveKbSource = if ([string]::IsNullOrWhiteSpace($LiveKbPath)) { 'none' } else { 'explicit' }
-if ([string]::IsNullOrWhiteSpace($LiveKbPath)) {
-    if (-not [string]::IsNullOrWhiteSpace($env:GXMCP_TEST_KB)) {
-        $LiveKbPath = $env:GXMCP_TEST_KB
-        $liveKbSource = 'environment'
-    } elseif (@($LiveMajors | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -eq 0 -and @($LiveGxPathMap | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -eq 0) {
-        $localFixture = Get-LocalLiveKbPath -Catalog $gxCatalog -GxPath $GxPath
-        if ($null -ne $localFixture) {
-            $LiveKbPath = [string]$localFixture.path
-            $liveKbSource = [string]$localFixture.source
-        }
-    } else {
-        $liveKbSource = 'matrix-explicit-required'
-    }
-}
-$liveFixtureSource = if ([string]::IsNullOrWhiteSpace($LiveFixtureManifest)) { 'none' } else { 'explicit' }
-if ([string]::IsNullOrWhiteSpace($LiveFixtureManifest) -and -not [string]::IsNullOrWhiteSpace($env:GXMCP_TEST_FIXTURE)) {
-    $LiveFixtureManifest = $env:GXMCP_TEST_FIXTURE
-    $liveFixtureSource = 'environment'
 }
 if ([string]::IsNullOrWhiteSpace($SummaryPath)) {
     $SummaryPath = Join-Path $env:TEMP ('gxmcp-release-preflight-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.json')
@@ -107,60 +42,44 @@ try {
     }
 } catch { }
 
-function Get-PreflightArtifactFingerprint {
-    param([Parameter(Mandatory = $true)][string]$Root)
-
-    $relativePaths = @(
-        'publish/GxMcp.Gateway.exe',
-        'publish/worker/GxMcp.Worker.exe',
-        'publish/tool_definitions.json',
-        'publish/nexus-ide.vsix'
-    )
-    $parts = New-Object System.Collections.Generic.List[string]
-    foreach ($relativePath in $relativePaths) {
-        $path = Join-Path $Root ($relativePath -replace '/', '\\')
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
-        $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-        [void]$parts.Add(('{0}={1}' -f $relativePath, $hash))
-    }
-    $payload = ($parts -join "`n")
-    $sha = [Security.Cryptography.SHA256]::Create()
-    try {
-        return ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($payload))) -replace '-', '').ToLowerInvariant()
-    } finally {
-        $sha.Dispose()
-    }
+$artifactFingerprint = if ($DryRun) { $null } else {
+    Get-GxMcpReleaseArtifactFingerprint -RepositoryRoot $root -Version $Version -AllowLegacy:($Version -notmatch '^3\.')
 }
-
-function Test-PreflightResumeInputs {
-    param([Parameter(Mandatory = $true)][object]$PriorSummary)
-
-    $sameLiveMajors = ((@($PriorSummary.liveMajors) | ForEach-Object { [string]$_ }) -join ',') -eq ((@($LiveMajors) | ForEach-Object { [string]$_ }) -join ',')
-    $sameLiveMap = ((@($PriorSummary.liveGxPathMap) | ForEach-Object { [string]$_ }) -join ';') -eq ((@($LiveGxPathMap) | ForEach-Object { [string]$_ }) -join ';')
-    return $PriorSummary.schemaVersion -eq 'gxmcp-release-preflight/1' -and
-        $PriorSummary.status -in @('failed', 'running', 'passed') -and
-        [string]$PriorSummary.root -eq [string]$root -and
-        [string]$PriorSummary.version -eq [string]$Version -and
-        [string]$PriorSummary.sourceCommit -eq [string]$sourceCommit -and
-        [string]$PriorSummary.gxPath -eq [string]$GxPath -and
-        [string]$PriorSummary.liveKbPath -eq [string]$LiveKbPath -and
-        [string]$PriorSummary.liveMode -eq [string]$liveMode -and
-        $sameLiveMajors -and $sameLiveMap -and
-        $null -ne $artifactFingerprint -and
-        -not [string]::IsNullOrWhiteSpace([string]$PriorSummary.artifactFingerprint) -and
-        [string]$PriorSummary.artifactFingerprint -eq [string]$artifactFingerprint
-}
-
-$artifactFingerprint = if ($DryRun) { $null } else { Get-PreflightArtifactFingerprint -Root $root }
+$preflightInputs = Resolve-GxMcpReleasePreflightInputs `
+    -Root $root `
+    -Catalog $gxCatalog `
+    -GxPath $GxPath `
+    -Version $Version `
+    -SourceCommit $sourceCommit `
+    -LiveMajors $LiveMajors `
+    -LiveGxPathMap $LiveGxPathMap `
+    -LiveKbPath $LiveKbPath `
+    -LiveFixtureManifest $LiveFixtureManifest `
+    -RequireLive:$RequireLive `
+    -RequireBuildAll:$RequireBuildAll `
+    -SkipLive:$SkipLive `
+    -SkipWarningBaseline:$SkipWarningBaseline `
+    -ArtifactFingerprint $artifactFingerprint
+$GxPath = [string]$preflightInputs.gxPath
+$LiveKbPath = [string]$preflightInputs.liveKbPath
+$LiveFixtureManifest = [string]$preflightInputs.liveFixtureManifest
+$LiveMajors = @($preflightInputs.liveMajors)
+$LiveGxPathMap = @($preflightInputs.liveGxPathMap)
+$liveKbSource = [string]$preflightInputs.liveKbSource
+$liveFixtureSource = [string]$preflightInputs.liveFixtureSource
+$liveMode = [string]$preflightInputs.liveMode
+$RequireBuildAll = [bool]$preflightInputs.requireBuildAll
+$artifactFingerprint = $preflightInputs.artifactFingerprint
 $resumeEnabled = $false
 $resumePhases = @{}
 $resumeReason = $null
+$priorSummary = $null
 if (-not $DryRun -and -not [string]::IsNullOrWhiteSpace($ResumeSummaryPath)) {
     $ResumeSummaryPath = [IO.Path]::GetFullPath($ResumeSummaryPath)
     if (Test-Path -LiteralPath $ResumeSummaryPath -PathType Leaf) {
         try {
             $priorSummary = Get-Content -LiteralPath $ResumeSummaryPath -Raw | ConvertFrom-Json
-            $sameInputs = Test-PreflightResumeInputs -PriorSummary $priorSummary
+            $sameInputs = Test-GxMcpReleasePreflightCompatibility -Summary $priorSummary -Expected $preflightInputs
             if ($sameInputs) {
                 foreach ($priorPhase in @($priorSummary.phases)) {
                     if ($priorPhase.status -eq 'passed') {
@@ -180,20 +99,28 @@ $summary = [ordered]@{
     schemaVersion = 'gxmcp-release-preflight/1'
     startedAtUtc = [DateTime]::UtcNow.ToString('o')
     endedAtUtc = $null
-    root = $root
-    gxPath = $GxPath
-    liveKbPath = $LiveKbPath
-    liveKbSource = $liveKbSource
-    liveFixtureManifest = $LiveFixtureManifest
-    liveFixtureSource = $liveFixtureSource
-    liveMode = $liveMode
-    liveMajors = @($LiveMajors)
-    liveGxPathMap = @($LiveGxPathMap)
-    version = $Version
-    sourceCommit = $sourceCommit
-    artifactFingerprint = $artifactFingerprint
+    root = $preflightInputs.root
+    gxPath = $preflightInputs.gxPath
+    liveKbPath = $preflightInputs.liveKbPath
+    liveKbSource = $preflightInputs.liveKbSource
+    liveFixtureManifest = $preflightInputs.liveFixtureManifest
+    liveFixtureSource = $preflightInputs.liveFixtureSource
+    liveMode = $preflightInputs.liveMode
+    liveMajors = @($preflightInputs.liveMajors)
+    liveGxPathMap = @($preflightInputs.liveGxPathMap)
+    requireLive = $preflightInputs.requireLive
+    requireBuildAll = $preflightInputs.requireBuildAll
+    skipLive = $preflightInputs.skipLive
+    skipWarningBaseline = $preflightInputs.skipWarningBaseline
+    version = $preflightInputs.version
+    sourceCommit = $preflightInputs.sourceCommit
+    artifactFingerprint = $preflightInputs.artifactFingerprint
     phaseTimeoutSeconds = $PhaseTimeoutSeconds
     executionMode = if ($DryRun) { 'dry-run' } elseif ($resumeEnabled) { 'parallel-resume' } else { 'parallel' }
+    processSmokeMode = 'serial-after-parallel'
+    processSmokeTestCount = $null
+    processSmokeResultsPath = $null
+    processSmokeBinaryFingerprint = $null
     resumedFrom = if ($resumeEnabled) { $ResumeSummaryPath } else { $null }
     wallDurationSeconds = 0
     phaseDurationTotalSeconds = 0
@@ -224,11 +151,34 @@ function Format-PreflightCommand {
     return ((@($Executable) + @($Arguments)) -join ' ').Trim()
 }
 
+function Test-PreflightPhaseStatus {
+    param(
+        [Parameter(Mandatory = $true)][string]$Status,
+        [switch]$AllowFailure,
+        [switch]$AllowUnavailable
+    )
+
+    if ($AllowFailure -and $Status -eq 'failed') { return $true }
+    if ($AllowUnavailable -and $Status -eq 'unavailable') { return $true }
+    return $Status -in @('passed', 'skipped', 'dry-run')
+}
+
+function Get-PreflightTrxTestCount {
+    param([Parameter(Mandatory = $true)][string]$ResultsDirectory)
+
+    return Get-GxMcpPreflightTrxTestCount -ResultsDirectory $ResultsDirectory
+}
+
 function Get-ReusablePreflightPhase {
     param([Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][string]$Command)
 
+    if ($Name -eq 'solution process smoke tests') { return $null }
     if (-not $resumeEnabled -or -not $resumePhases.ContainsKey($Name)) { return $null }
     $prior = $resumePhases[$Name]
+    if ([string]$prior.status -ne 'passed' -or [string]::IsNullOrWhiteSpace([string]$prior.command) -or
+        [string]$prior.command -cne $Command) {
+        return $null
+    }
     [ordered]@{
         name = $Name
         command = if ([string]::IsNullOrWhiteSpace([string]$prior.command)) { $Command } else { [string]$prior.command }
@@ -275,6 +225,7 @@ function New-PreflightPhaseState {
     }
     if ($SkipReason) {
         $phase.status = 'skipped'
+        $phase.exitCode = 0
         $phase.reason = $SkipReason
         $phase.endedAtUtc = [DateTime]::UtcNow.ToString('o')
         return [pscustomobject]@{
@@ -435,18 +386,25 @@ function Invoke-PreflightParallel {
         $phase
     }
     $allowedFailureNames = @{}
+    $allowedUnavailableNames = @{}
     foreach ($definition in @($Definitions)) {
         if ($definition.Contains('AllowFailure') -and [bool]$definition.AllowFailure) {
             $allowedFailureNames[[string]$definition.Name] = $true
         }
+        if ($definition.Contains('AllowUnavailable') -and [bool]$definition.AllowUnavailable) {
+            $allowedUnavailableNames[[string]$definition.Name] = $true
+        }
     }
-    $failed = @($results | Where-Object {
-        $_.status -eq 'failed' -and -not $allowedFailureNames.ContainsKey([string]$_.name)
+    $blocking = @($results | Where-Object {
+        if ($DryRun) { return $false }
+        -not (Test-PreflightPhaseStatus -Status ([string]$_.status) `
+            -AllowFailure:($allowedFailureNames.ContainsKey([string]$_.name)) `
+            -AllowUnavailable:($allowedUnavailableNames.ContainsKey([string]$_.name)))
     })
-    if ($failed.Count -gt 0) {
+    if ($blocking.Count -gt 0) {
         $summary.status = 'failed'
         Write-PreflightSummary
-        $firstFailure = $failed | Select-Object -First 1
+        $firstFailure = $blocking | Select-Object -First 1
         Write-Error "Preflight failed in '$($firstFailure.name)': $($firstFailure.reason)"
         exit 1
     }
@@ -467,7 +425,9 @@ function Invoke-PreflightPhase {
         -AllowFailure:$AllowFailure -AllowUnavailable:$AllowUnavailable -SkipReason $SkipReason
     $phase = Complete-PreflightPhase -State $state
     Add-PreflightPhaseResult -Phase $phase
-    if ($phase.status -eq 'failed' -and -not $AllowFailure) {
+    $phaseBlocked = -not (Test-PreflightPhaseStatus -Status ([string]$phase.status) `
+        -AllowFailure:$AllowFailure -AllowUnavailable:$AllowUnavailable)
+    if ($phaseBlocked) {
         $summary.status = 'failed'
         Write-PreflightSummary
         Write-Error "Preflight failed in '$Name': $($phase.reason)"
@@ -484,6 +444,12 @@ Invoke-PreflightPhase -Name 'release metadata parity' -Executable 'python' -Argu
 Invoke-PreflightPhase -Name 'tool contract validation' -Executable 'python' -Arguments @((Join-Path $root 'scripts\validate-tool-contracts.py')) | Out-Null
 Invoke-PreflightPhase -Name 'operation contract inventory' -Executable 'python' -Arguments @((Join-Path $root 'scripts\generate-operation-contract-inventory.py'), '--check') | Out-Null
 Invoke-PreflightPhase -Name 'v3 plan readiness' -Executable 'python' -Arguments @((Join-Path $root 'scripts\validate-v3-plan.py'), '--require-ready') | Out-Null
+Invoke-PreflightPhase -Name 'warning baseline documentation parity' -Executable 'pwsh' -Arguments @(
+    '-NoProfile', '-File', (Join-Path $root 'scripts\check-build-warning-baseline.ps1'),
+    '-ValidateOnly',
+    '-BaselineFile', (Join-Path $root 'docs\build_warning_baseline.json'),
+    '-DocumentationFile', (Join-Path $root 'docs\build_warning_baseline.md')
+) | Out-Null
 $liveRequested = -not $SkipLive
 $missingLiveReasons = New-Object System.Collections.Generic.List[string]
 if ([string]::IsNullOrWhiteSpace($LiveKbPath)) {
@@ -564,18 +530,66 @@ if (-not $liveRequested) {
 }
 
 # The warning baseline performs a full Rebuild and must not overlap with the
-# solution test's MSBuild output. All other phases use isolated processes or
-# the already-built publish/ directory, so they can share the critical path.
+# solution test's MSBuild output. Process/socket smoke tests also run in a
+# dedicated lane after the parallel wave: launching Gateways while the CLI,
+# Nexus, and script suites are active made the release signal nondeterministic.
 $parallelDefinitions = @(
     [ordered]@{ Name = 'Python script tests'; Executable = 'python'; Arguments = @('-m', 'unittest', 'discover', '-s', (Join-Path $root 'scripts\tests'), '-v'); WorkingDirectory = $root },
     [ordered]@{ Name = 'PowerShell script tests'; Executable = 'pwsh'; Arguments = @('-NoProfile', '-File', (Join-Path $root 'scripts/tests/run-release-script-tests.ps1')); WorkingDirectory = $root },
     [ordered]@{ Name = 'CLI tests'; Executable = 'npm'; Arguments = @('test'); WorkingDirectory = $root },
     [ordered]@{ Name = 'CLI lint'; Executable = 'npm'; Arguments = @('run', 'lint'); WorkingDirectory = $root },
     [ordered]@{ Name = 'Nexus IDE checks'; Executable = 'npm'; Arguments = @('--prefix', (Join-Path $root 'src\nexus-ide'), 'run', 'check'); WorkingDirectory = $root },
-    [ordered]@{ Name = 'solution build and tests'; Executable = 'dotnet'; Arguments = @('test', (Join-Path $root 'Genexus18MCP.sln'), '-c', 'Release', '-v:minimal'); WorkingDirectory = $root }
+    [ordered]@{ Name = 'solution build and tests'; Executable = 'dotnet'; Arguments = @('test', (Join-Path $root 'Genexus18MCP.sln'), '-c', 'Release', '--filter', 'Category!=ProcessSmoke', '-v:minimal'); WorkingDirectory = $root }
 )
 
 Invoke-PreflightParallel -Definitions $parallelDefinitions | Out-Null
+$processSmokeResultsPath = Join-Path $env:TEMP ('gxmcp-release-process-smoke-' + [guid]::NewGuid().ToString('N'))
+$processSmokeGateway = Join-Path $root 'src\GxMcp.Gateway\bin\Release\net10.0-windows\GxMcp.Gateway.exe'
+if (-not $DryRun -and -not (Test-Path -LiteralPath $processSmokeGateway -PathType Leaf)) {
+    $summary.status = 'failed'
+    Write-PreflightSummary
+    Write-Error "Process smoke lane did not find the Release Gateway built by the preceding phase: $processSmokeGateway"
+    exit 1
+}
+$processSmokeDefinition = [ordered]@{
+    Name = 'solution process smoke tests'
+    Executable = 'dotnet'
+    Arguments = @(
+        'test', (Join-Path $root 'Genexus18MCP.sln'), '-c', 'Release', '--no-build', '--no-restore',
+        '--filter', 'Category=ProcessSmoke', '--logger', 'trx;LogFilePrefix=process-smoke',
+        '--results-directory', $processSmokeResultsPath, '-v:minimal'
+    )
+    WorkingDirectory = $root
+}
+$previousProcessSmokeGateway = $env:GXMCP_LIVE_GATEWAY_EXE
+try {
+    if (-not $DryRun) { $env:GXMCP_LIVE_GATEWAY_EXE = $processSmokeGateway }
+    Invoke-PreflightPhase @processSmokeDefinition | Out-Null
+} finally {
+    if ($null -eq $previousProcessSmokeGateway) {
+        Remove-Item Env:GXMCP_LIVE_GATEWAY_EXE -ErrorAction SilentlyContinue
+    } else {
+        $env:GXMCP_LIVE_GATEWAY_EXE = $previousProcessSmokeGateway
+    }
+}
+if (-not $DryRun) {
+    $summary.processSmokeResultsPath = $processSmokeResultsPath
+    $summary.processSmokeTestCount = Get-PreflightTrxTestCount -ResultsDirectory $processSmokeResultsPath
+    $summary.processSmokeBinaryFingerprint = Get-GxMcpReleaseProcessSmokeFingerprint -RepositoryRoot $root
+    if ($null -eq $summary.processSmokeBinaryFingerprint) {
+        $summary.status = 'failed'
+        Write-PreflightSummary
+        Write-Error 'Process smoke binaries could not be bound to the current publish artifacts.'
+        exit 1
+    }
+    if ($summary.processSmokeTestCount -le 0) {
+        $summary.status = 'failed'
+        Write-PreflightSummary
+        Write-Error 'Process smoke filter selected zero tests; refusing to certify the preflight.'
+        exit 1
+    }
+    Write-PreflightSummary
+}
 if ($SkipWarningBaseline) {
     Invoke-PreflightPhase -Name 'Release warning baseline' -Executable 'pwsh' -Arguments @() -SkipReason 'disabled by -SkipWarningBaseline' | Out-Null
 } else {
@@ -586,7 +600,12 @@ if ($SkipWarningBaseline) {
 }
 Invoke-PreflightPhase @liveDefinition | Out-Null
 
-$summary.status = if (@($summary.phases | Where-Object status -eq 'failed').Count -eq 0) { 'passed' } else { 'failed' }
+$allowedTerminalStatuses = @('passed', 'skipped', 'unavailable')
+if ($DryRun) { $allowedTerminalStatuses += 'dry-run' }
+$terminalPhaseFailure = @($summary.phases | Where-Object {
+    [string]$_.status -notin $allowedTerminalStatuses
+}).Count -gt 0
+$summary.status = if (-not $terminalPhaseFailure) { 'passed' } else { 'failed' }
 Write-PreflightSummary
 if ($summary.status -eq 'passed') {
     Write-Host "`nPreflight passed. Summary: $SummaryPath" -ForegroundColor Green

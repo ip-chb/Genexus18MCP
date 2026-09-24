@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $scriptPath = Join-Path $root 'scripts/release-issues.ps1'
@@ -18,7 +18,7 @@ $readTokens = $null
 $readErrors = $null
 [System.Management.Automation.Language.Parser]::ParseFile($readIssuePath, [ref]$readTokens, [ref]$readErrors) | Out-Null
 if ($readErrors.Count) { throw $readErrors[0] }
-foreach ($name in @('Get-GhJson', 'Get-ReleaseIssueData', 'Get-ReleaseIssueLabelNames', 'Assert-ReleaseIssueAction')) {
+foreach ($name in @('Get-GhJson', 'Get-ReleaseIssueData', 'Get-ReleaseIssueLabelNames', 'Assert-ReleaseIssueAction', 'Test-ReleaseIssuePublicationComment')) {
     $definition = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
     if (-not $definition) { throw "Missing production function: $name" }
     . ([scriptblock]::Create($definition.Extent.Text))
@@ -50,6 +50,11 @@ Assert-ReleaseIssueAction -Action 'CloseAfterRelease' -IssueNumber 185 -IssueDat
 Expect-Failure { Assert-ReleaseIssueAction -Action 'CloseAfterRelease' -IssueNumber 186 -IssueData $openWithoutLabel } 'Unlabeled issue closure was allowed.'
 Expect-Failure { Assert-ReleaseIssueAction -Action 'MarkFixedPendingRelease' -IssueNumber 187 -IssueData $closedWithLabel } 'Closed issue was allowed in the mark-fixed workflow.'
 Expect-Failure { Assert-ReleaseIssueAction -Action 'CloseAfterRelease' -IssueNumber 188 -IssueData $closedWithLabel } 'Closed issue was allowed in the release closure workflow.'
+$releaseUrl = 'https://github.com/lennix1337/Genexus18MCP/releases/tag/v3.9.1'
+$withReleaseComment = [pscustomobject]@{ comments = @([pscustomobject]@{ body = "Released in $releaseUrl" }) }
+$withoutReleaseComment = [pscustomobject]@{ comments = @([pscustomobject]@{ body = 'unrelated comment' }) }
+if (-not (Test-ReleaseIssuePublicationComment -IssueData $withReleaseComment -ReleaseUrl $releaseUrl)) { throw 'Release publication comment was not recognized.' }
+if (Test-ReleaseIssuePublicationComment -IssueData $withoutReleaseComment -ReleaseUrl $releaseUrl) { throw 'Unrelated issue comment was accepted as release evidence.' }
 
 $temp = Join-Path $env:TEMP ('gxmcp-release-issue-json-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temp -Force | Out-Null

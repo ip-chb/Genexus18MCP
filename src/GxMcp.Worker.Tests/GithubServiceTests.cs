@@ -7,6 +7,7 @@ using Xunit;
 
 namespace GxMcp.Worker.Tests
 {
+    [Trait("Category", "ProcessSmoke")]
     public class GithubServiceTests
     {
         [Fact]

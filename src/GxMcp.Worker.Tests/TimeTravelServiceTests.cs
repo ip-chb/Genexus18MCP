@@ -9,6 +9,7 @@ using Xunit;
 
 namespace GxMcp.Worker.Tests
 {
+    [Trait("Category", "ProcessSmoke")]
     public class TimeTravelServiceTests : IDisposable
     {
         private readonly string _tempDir;

@@ -9,9 +9,9 @@ $fixtureRoot = Join-Path $env:TEMP ('gxmcp-preflight-fixtures-' + [guid]::NewGui
 $SummaryPath = $null
 $requiredNames = @(
     'release metadata parity', 'tool contract validation', 'operation contract inventory',
-    'v3 plan readiness', 'Python script tests', 'PowerShell script tests',
+    'v3 plan readiness', 'warning baseline documentation parity', 'Python script tests', 'PowerShell script tests',
     'CLI tests', 'CLI lint', 'Nexus IDE checks', 'solution build and tests',
-    'Release warning baseline',
+    'solution process smoke tests', 'Release warning baseline',
     'live KB gate'
 )
 try {
@@ -19,9 +19,7 @@ try {
     $tokens = $null; $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($preflightPath, [ref]$tokens, [ref]$errors)
     if ($errors.Count) { throw $errors[0] }
-    $fixtureFunction = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-LocalLiveKbPath' }, $true)
-    if (-not $fixtureFunction) { throw 'Missing Get-LocalLiveKbPath production function.' }
-    . ([scriptblock]::Create($fixtureFunction.Extent.Text))
+    . (Join-Path $root 'scripts/release-contract.ps1')
     $catalog = [pscustomobject]@{
         primaryMajor = '18'
         supportedMajors = @(
@@ -30,31 +28,36 @@ try {
         )
     }
     New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'KBTeste'), (Join-Path $fixtureRoot 'KBTeste17') -Force | Out-Null
-    $auto18 = @(Get-LocalLiveKbPath -Catalog $catalog -GxPath 'C:\Program Files (x86)\GeneXus\GeneXus18' -KbRoot $fixtureRoot)
-    $auto17 = @(Get-LocalLiveKbPath -Catalog $catalog -GxPath 'C:\Program Files (x86)\GeneXus\GeneXus17Trial' -KbRoot $fixtureRoot)
-    $auto17Custom = @(Get-LocalLiveKbPath -Catalog $catalog -GxPath 'D:\SDK\GeneXus17Trial' -KbRoot $fixtureRoot)
-    $none = @(Get-LocalLiveKbPath -Catalog $catalog -GxPath 'C:\SDK\Unknown' -KbRoot (Join-Path $env:TEMP 'gxmcp-no-fixtures'))
+    $auto18 = @(Get-GxMcpLocalLiveKbPath -Catalog $catalog -GxPath 'C:\Program Files (x86)\GeneXus\GeneXus18' -KbRoot $fixtureRoot)
+    $auto17 = @(Get-GxMcpLocalLiveKbPath -Catalog $catalog -GxPath 'C:\Program Files (x86)\GeneXus\GeneXus17Trial' -KbRoot $fixtureRoot)
+    $auto17Custom = @(Get-GxMcpLocalLiveKbPath -Catalog $catalog -GxPath 'D:\SDK\GeneXus17Trial' -KbRoot $fixtureRoot)
+    $none = Get-GxMcpLocalLiveKbPath -Catalog $catalog -GxPath 'C:\SDK\Unknown' -KbRoot (Join-Path $env:TEMP 'gxmcp-no-fixtures')
     if ($auto18.Count -ne 1 -or $auto18[0].major -ne '18' -or $auto18[0].path -ne (Join-Path $fixtureRoot 'KBTeste')) { throw 'GeneXus 18 fixture autodetection selected the wrong KB.' }
     if ($auto17.Count -ne 1 -or $auto17[0].major -ne '17' -or $auto17[0].path -ne (Join-Path $fixtureRoot 'KBTeste17')) { throw 'GeneXus 17 fixture autodetection selected the wrong KB.' }
     if ($auto17Custom.Count -ne 1 -or $auto17Custom[0].major -ne '17' -or $auto17Custom[0].path -ne (Join-Path $fixtureRoot 'KBTeste17')) { throw 'Custom GeneXus 17 fixture autodetection selected the wrong KB.' }
-    if ($none.Count -ne 1 -or $null -ne $none[0]) { throw 'Fixture autodetection returned a KB that does not exist.' }
+    if ($null -ne $none) { throw 'Fixture autodetection returned a KB that does not exist.' }
 
     & pwsh -NoProfile -File (Join-Path $root 'scripts/release-preflight.ps1') -DryRun -SkipLive -SummaryPath $drySummary
     if ($LASTEXITCODE -ne 0) { throw "Dry-run preflight failed with exit code $LASTEXITCODE." }
     $summary = Get-Content -LiteralPath $drySummary -Raw | ConvertFrom-Json
     if ($summary.schemaVersion -ne 'gxmcp-release-preflight/1') { throw 'Unexpected preflight summary schema.' }
-    if ($summary.executionMode -ne 'dry-run' -or $summary.wallDurationSeconds -lt 0 -or $summary.phaseDurationTotalSeconds -lt 0) {
-        throw 'Preflight summary must expose nonnegative wall and phase timing metrics.'
+    if ($summary.executionMode -ne 'dry-run' -or $summary.processSmokeMode -ne 'serial-after-parallel' -or $summary.wallDurationSeconds -lt 0 -or $summary.phaseDurationTotalSeconds -lt 0) {
+        throw 'Preflight summary must expose execution mode, process lane and nonnegative timing metrics.'
     }
     $actualNames = @($summary.phases | ForEach-Object name)
     if (($actualNames -join '|') -ne ($requiredNames -join '|')) { throw "Preflight phase order changed: $($actualNames -join ', ')" }
     $buildIndex = [array]::IndexOf($actualNames, 'solution build and tests')
-    foreach ($staticName in @('tool contract validation', 'operation contract inventory', 'v3 plan readiness', 'Python script tests', 'PowerShell script tests')) {
+    $processIndex = [array]::IndexOf($actualNames, 'solution process smoke tests')
+    $liveIndex = [array]::IndexOf($actualNames, 'live KB gate')
+    foreach ($staticName in @('tool contract validation', 'operation contract inventory', 'v3 plan readiness', 'warning baseline documentation parity', 'Python script tests', 'PowerShell script tests')) {
         if ([array]::IndexOf($actualNames, $staticName) -ge $buildIndex) {
             throw "Cheap static phase '$staticName' must run before the solution build and tests."
         }
     }
-    if (@($summary.phases | Where-Object status -eq 'dry-run').Count -ne 11) { throw 'All non-live phases must be marked dry-run.' }
+    if ($processIndex -le $buildIndex -or $liveIndex -le $processIndex) {
+        throw 'Process smoke tests must run after the solution build and before the live gate.'
+    }
+    if (@($summary.phases | Where-Object status -eq 'dry-run').Count -ne 13) { throw 'All non-live phases must be marked dry-run.' }
     if (@($summary.phases | Where-Object status -eq 'skipped').Count -ne 1) { throw 'Live skip must be explicit in the summary.' }
 
     & pwsh -NoProfile -File (Join-Path $root 'scripts\release-preflight.ps1') -DryRun -SkipLive -LiveMajors '17,18' -LiveGxPathMap '17=C:\SDK\GX17' -SummaryPath $matrixDrySummary *> $null
@@ -81,14 +84,67 @@ try {
     foreach ($marker in @(
         'LiveMajors', 'LiveGxPathMap', 'test-live-matrix.ps1', "liveMode =",
         'Start-PreflightPhase', 'Complete-PreflightPhase', 'Invoke-PreflightParallel',
-        'ResumeSummaryPath', 'artifactFingerprint', 'sourceCommit', 'executionMode'
+        'ResumeSummaryPath', 'artifactFingerprint', 'sourceCommit', 'executionMode',
+        'warning baseline documentation parity', 'check-build-warning-baseline.ps1'
     )) {
         if ($preflightSource -notmatch [regex]::Escape($marker)) { throw "Release preflight is missing multi-version live marker: $marker" }
     }
     if ($preflightSource.Contains(', $liveDefinition')) { throw 'Live KB gate must not run in parallel with the solution MSBuild phase.' }
+    foreach ($marker in @(
+        'Category!=ProcessSmoke', 'Category=ProcessSmoke', 'solution process smoke tests', '$processSmokeDefinition',
+        'GXMCP_LIVE_GATEWAY_EXE', '--no-build', '--no-restore', '--logger', 'Get-PreflightTrxTestCount',
+        'processSmokeTestCount', 'Process smoke filter selected zero tests'
+    )) {
+        if ($preflightSource -notmatch [regex]::Escape($marker)) { throw "Process-sensitive preflight marker is missing: $marker" }
+    }
+    $parallelAssignment = $ast.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+            $node.Left.Extent.Text -eq '$parallelDefinitions'
+    }, $true)
+    if (-not $parallelAssignment -or $parallelAssignment.Extent.Text -match 'solution process smoke tests|Category=ProcessSmoke') {
+        throw 'Process smoke tests must never be present in the parallel definition set.'
+    }
+    $processAssignment = $ast.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+            $node.Left.Extent.Text -eq '$processSmokeDefinition'
+    }, $true)
+    if (-not $processAssignment -or
+        $processAssignment.Extent.Text -notmatch '--no-build' -or
+        $processAssignment.Extent.Text -notmatch '--no-restore') {
+        throw 'The process lane must execute the current Release binaries with no rebuild or restore.'
+    }
     $parallelCall = $preflightSource.IndexOf('Invoke-PreflightParallel -Definitions', [StringComparison]::Ordinal)
+    $processCall = $preflightSource.IndexOf('Invoke-PreflightPhase @processSmokeDefinition', [StringComparison]::Ordinal)
     $liveCall = $preflightSource.IndexOf('Invoke-PreflightPhase @liveDefinition', [StringComparison]::Ordinal)
-    if ($parallelCall -lt 0 -or $liveCall -le $parallelCall) { throw 'Live KB gate must run after the shared solution test wave.' }
+    if ($parallelCall -lt 0 -or $processCall -le $parallelCall -or $liveCall -le $processCall) {
+        throw 'Process smoke tests must run after the parallel wave and before the live gate.'
+    }
+    $processTestFiles = @(
+        'src/GxMcp.Gateway.Tests/Issue146AcceptanceMatrixContractTests.cs',
+        'src/GxMcp.Gateway.Tests/McpSmokeScriptContractTests.cs',
+        'src/GxMcp.Gateway.Tests/GatewayProcessLeaseTests.cs',
+        'src/GxMcp.Gateway.Tests/LiveGatewayHarnessCleanupTests.cs',
+        'src/GxMcp.Worker.Tests/BuildServiceTests.cs',
+        'src/GxMcp.Worker.Tests/BuildReapByPidTests.cs',
+        'src/GxMcp.Worker.Tests/GithubServiceTests.cs',
+        'src/GxMcp.Worker.Tests/TimeTravelServiceTests.cs'
+    ) | ForEach-Object { Join-Path $root $_ }
+    $gatewayTestRoot = Join-Path $root 'src\GxMcp.Gateway.Tests'
+    $processTestFiles += @(Get-ChildItem -LiteralPath $gatewayTestRoot -Filter '*.cs' -File | Where-Object {
+        (Get-Content -LiteralPath $_.FullName -Raw) -match 'class\s+\w+\s*:\s*[^\r\n]*IClassFixture<LiveGatewayHarness>'
+    } | ForEach-Object { $_.FullName })
+    foreach ($testFile in @($processTestFiles | Sort-Object -Unique)) {
+        $testSource = Get-Content -LiteralPath $testFile -Raw
+        if ($testSource -notmatch '\[\s*Trait\("Category",\s*"ProcessSmoke"\)\s*\]') {
+            throw "ProcessSmoke trait is missing from $testFile."
+        }
+    }
+    $issue146Source = Get-Content -LiteralPath (Join-Path $root 'src/GxMcp.Gateway.Tests/Issue146AcceptanceMatrixContractTests.cs') -Raw
+    if ($issue146Source -notmatch '(?s)\[\s*Trait\("Category",\s*"ProcessSmoke"\)\s*\]\s*public\s+sealed\s+class\s+Issue146StdioSmokeContractTests') {
+        throw 'The stdio process test class itself must carry the ProcessSmoke trait.'
+    }
 
     # Exercise the new parallel coordinator in dry-run mode. This keeps the
     # test independent of SDK availability while proving deterministic result
@@ -97,15 +153,20 @@ try {
     $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'scripts/release-preflight.ps1'), [ref]$tokens, [ref]$errors)
     if ($errors.Count) { throw $errors[0] }
     $functionNames = @(
-        'Format-PreflightCommand', 'Write-PreflightSummary',
-        'Get-PreflightArtifactFingerprint', 'Test-PreflightResumeInputs', 'Get-ReusablePreflightPhase', 'New-PreflightPhaseState',
-        'Start-PreflightPhase', 'Complete-PreflightPhase',
+        'Format-PreflightCommand', 'Write-PreflightSummary', 'Test-PreflightPhaseStatus', 'Get-PreflightTrxTestCount',
+        'Get-ReusablePreflightPhase', 'New-PreflightPhaseState', 'Start-PreflightPhase', 'Complete-PreflightPhase',
         'Add-PreflightPhaseResult', 'Invoke-PreflightParallel'
     )
     foreach ($name in $functionNames) {
         $definition = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
         if (-not $definition) { throw "Missing parallel preflight function: $name" }
         . ([scriptblock]::Create($definition.Extent.Text))
+    }
+    if ((Test-PreflightPhaseStatus -Status 'timeout') -or
+        (Test-PreflightPhaseStatus -Status 'failed') -or
+        (Test-PreflightPhaseStatus -Status 'unavailable') -or
+        -not (Test-PreflightPhaseStatus -Status 'unavailable' -AllowUnavailable)) {
+        throw 'Timeout, failure, and disallowed unavailable statuses must fail closed.'
     }
     $summary = [ordered]@{
         startedAtUtc = [DateTime]::UtcNow.ToString('o')
@@ -145,43 +206,84 @@ try {
     Set-Content -LiteralPath (Join-Path $artifactRoot 'publish/worker/GxMcp.Worker.exe') -Value 'worker' -NoNewline
     Set-Content -LiteralPath (Join-Path $artifactRoot 'publish/tool_definitions.json') -Value '{}' -NoNewline
     Set-Content -LiteralPath (Join-Path $artifactRoot 'publish/nexus-ide.vsix') -Value 'vsix' -NoNewline
-    $fingerprint = @(Get-PreflightArtifactFingerprint -Root $artifactRoot)
-    if ($fingerprint.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$fingerprint[0])) {
+    $fingerprint = Get-GxMcpReleaseArtifactFingerprint -RepositoryRoot $artifactRoot
+    if ([string]::IsNullOrWhiteSpace([string]$fingerprint)) {
         throw 'Artifact fingerprint must be one scalar value when all release artifacts exist.'
     }
-    $Version = '3.5.0'
-    $GxPath = 'sdk-path'
-    $LiveKbPath = 'kb-path'
-    $liveMode = 'single'
-    $LiveMajors = @()
-    $LiveGxPathMap = @()
-    $sourceCommit = 'source-commit'
-    $artifactFingerprint = [string]$fingerprint[0]
-    $matchingResume = [pscustomobject]@{
-        schemaVersion = 'gxmcp-release-preflight/1'; status = 'failed'; root = $root
-        version = '3.5.0'; sourceCommit = 'source-commit'; gxPath = 'sdk-path'
-        liveKbPath = 'kb-path'; liveMode = 'single'; liveMajors = @(); liveGxPathMap = @()
-        artifactFingerprint = $artifactFingerprint
+    $trxRoot = Join-Path $fixtureRoot 'process-trx'
+    New-Item -ItemType Directory -Path $trxRoot -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $trxRoot 'process.trx'), '<TestRun><ResultSummary><Counters total="3" executed="3" /></ResultSummary></TestRun>')
+    if ((Get-PreflightTrxTestCount -ResultsDirectory $trxRoot) -ne 3) {
+        throw 'Process smoke TRX test count was not preserved.'
     }
-    if (-not (Test-PreflightResumeInputs -PriorSummary $matchingResume)) {
-        throw 'A matching preflight summary must be resumable.'
+    $resumeCatalog = [pscustomobject]@{
+        primaryMajor = '18'
+        supportedMajors = @([pscustomobject]@{ major = '18'; defaultInstallPath = 'C:\SDK\GeneXus18' })
+    }
+    $resumeExpected = Resolve-GxMcpReleasePreflightInputs `
+        -Root $root -Catalog $resumeCatalog -GxPath 'C:\SDK\GeneXus18' -Version '3.5.0' `
+        -SourceCommit 'source-commit' -LiveKbPath 'C:\KBs\Fixture' `
+        -LiveFixtureManifest 'C:\Fixtures\release.json' -RequireBuildAll -ArtifactFingerprint $fingerprint
+    $matchingResume = [pscustomobject]@{
+        schemaVersion = 'gxmcp-release-preflight/1'; status = 'passed'
+        root = $resumeExpected.root; version = $resumeExpected.version; sourceCommit = $resumeExpected.sourceCommit
+        gxPath = $resumeExpected.gxPath; liveKbPath = $resumeExpected.liveKbPath; liveMode = $resumeExpected.liveMode
+        liveMajors = @($resumeExpected.liveMajors); liveGxPathMap = @($resumeExpected.liveGxPathMap)
+        liveFixtureManifest = $resumeExpected.liveFixtureManifest; liveKbSource = $resumeExpected.liveKbSource
+        liveFixtureSource = $resumeExpected.liveFixtureSource; requireLive = $resumeExpected.requireLive
+        requireBuildAll = $resumeExpected.requireBuildAll; skipLive = $resumeExpected.skipLive
+        skipWarningBaseline = $resumeExpected.skipWarningBaseline; artifactFingerprint = $resumeExpected.artifactFingerprint
+        processSmokeMode = 'serial-after-parallel'; processSmokeTestCount = 3
+        processSmokeResultsPath = $trxRoot; processSmokeBinaryFingerprint = Get-GxMcpReleaseProcessSmokeFingerprint -RepositoryRoot $root
+        phases = @(
+            foreach ($phaseName in (Get-GxMcpMandatoryPreflightPhaseNames)) {
+                $command = switch ($phaseName) {
+                    'release metadata parity' { 'python scripts/verify-release-metadata.py --version 3.5.0' }
+                    'tool contract validation' { 'python scripts/validate-tool-contracts.py' }
+                    'operation contract inventory' { 'python scripts/generate-operation-contract-inventory.py --check' }
+                    'v3 plan readiness' { 'python scripts/validate-v3-plan.py --require-ready' }
+                    'warning baseline documentation parity' { 'pwsh -File scripts/check-build-warning-baseline.ps1 -ValidateOnly' }
+                    'Python script tests' { 'python -m unittest discover -s scripts/tests -v' }
+                    'PowerShell script tests' { 'pwsh -File scripts/tests/run-release-script-tests.ps1' }
+                    'CLI tests' { 'npm test' }
+                    'CLI lint' { 'npm run lint' }
+                    'Nexus IDE checks' { 'npm --prefix src/nexus-ide run check' }
+                    'solution build and tests' { 'dotnet test Genexus18MCP.sln -c Release --filter Category!=ProcessSmoke -v:minimal' }
+                    'solution process smoke tests' { 'dotnet test Genexus18MCP.sln -c Release --no-build --no-restore --filter Category=ProcessSmoke --logger trx;LogFilePrefix=process-smoke --results-directory C:/temp/process-smoke -v:minimal' }
+                    'Release warning baseline' { 'pwsh -File scripts/check-build-warning-baseline.ps1 -BaselineFile docs/build_warning_baseline.json' }
+                    'live KB gate' { 'pwsh -File scripts/test-live.ps1 -KbPath C:/KBs/Fixture -SkipBuild' }
+                }
+                [pscustomobject]@{ name = $phaseName; status = 'passed'; command = $command; exitCode = 0 }
+            }
+        )
+    }
+    if (-not (Test-GxMcpReleasePreflightCompatibility -Summary $matchingResume -Expected $resumeExpected) -or
+        -not (Test-GxMcpReleasePreflightCertificate -Summary $matchingResume -Expected $resumeExpected)) {
+        throw 'A matching complete preflight summary must be resumable.'
     }
     $matchingResume.sourceCommit = 'different-commit'
-    if (Test-PreflightResumeInputs -PriorSummary $matchingResume) {
+    if (Test-GxMcpReleasePreflightCompatibility -Summary $matchingResume -Expected $resumeExpected) {
         throw 'A changed source commit must invalidate preflight resume.'
     }
-    $matchingResume.sourceCommit = $sourceCommit
+    $matchingResume.sourceCommit = $resumeExpected.sourceCommit
+    $matchingResume.liveFixtureManifest = 'C:\Fixtures\different.json'
+    if (Test-GxMcpReleasePreflightCompatibility -Summary $matchingResume -Expected $resumeExpected) {
+        throw 'A changed live fixture must invalidate preflight resume.'
+    }
+    $matchingResume.liveFixtureManifest = $resumeExpected.liveFixtureManifest
     $matchingResume.artifactFingerprint = 'different-artifact'
-    if (Test-PreflightResumeInputs -PriorSummary $matchingResume) {
+    if (Test-GxMcpReleasePreflightCompatibility -Summary $matchingResume -Expected $resumeExpected) {
         throw 'A changed artifact fingerprint must invalidate preflight resume.'
     }
-    $artifactFingerprint = $null
-    $matchingResume.artifactFingerprint = $null
-    if (Test-PreflightResumeInputs -PriorSummary $matchingResume) {
-        throw 'A missing artifact fingerprint must invalidate preflight resume.'
+    $matchingResume.artifactFingerprint = $resumeExpected.artifactFingerprint
+    $matchingResume.status = 'failed'
+    if (-not (Test-GxMcpReleasePreflightCompatibility -Summary $matchingResume -Expected $resumeExpected)) {
+        throw 'Build reuse should be allowed after rerunning a matching failed preflight.'
     }
-    $artifactFingerprint = [string]$fingerprint[0]
-    $matchingResume.artifactFingerprint = $artifactFingerprint
+    if (Test-GxMcpReleasePreflightCertificate -Summary $matchingResume -Expected $resumeExpected) {
+        throw 'A failed preflight must never certify SkipBuild and SkipTests.'
+    }
+    $matchingResume.status = 'passed'
     $definitions = @(
         [ordered]@{ Name = 'parallel first'; Executable = 'cmd.exe'; Arguments = @('/c', 'exit', '0'); WorkingDirectory = $root },
         [ordered]@{ Name = 'parallel second'; Executable = 'cmd.exe'; Arguments = @('/c', 'exit', '0'); WorkingDirectory = $root }
@@ -211,6 +313,12 @@ try {
     if ($reusableResult.status -ne 'passed' -or -not $reusableResult.reused) {
         throw 'Matching passed preflight phases must be marked reusable.'
     }
+    $resumePhases['reusable phase'].command = 'cmd.exe /c exit 7'
+    $commandMismatch = Start-PreflightPhase -Name 'reusable phase' -Executable 'cmd.exe' -Arguments @('/c', 'exit', '0') -WorkingDirectory $root
+    if ($null -ne $commandMismatch.Phase.PSObject.Properties['reused']) { throw 'A phase with a different exact command must not be reused.' }
+    $resumePhases['solution process smoke tests'] = [pscustomobject]@{ status = 'passed'; command = 'old' }
+    $processReuse = Get-ReusablePreflightPhase -Name 'solution process smoke tests' -Command 'new'
+    if ($null -ne $processReuse) { throw 'The process lane must execute again instead of reusing stale process evidence.' }
 
     # Load the production runner and exercise a nonzero command without
     # starting the real release matrix. AllowFailure keeps the phase object so

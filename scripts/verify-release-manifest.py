@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import zipfile
 
 
 REQUIRED = {
@@ -40,6 +41,11 @@ def main() -> int:
     parser.add_argument(
         "--source-commit",
         help="Require the manifest sourceCommit to match this resolved Git commit.",
+    )
+    parser.add_argument(
+        "--archive",
+        type=Path,
+        help="Verify that the ZIP contains exactly the staged publish tree and bytes.",
     )
     args = parser.parse_args()
     root = args.directory.resolve()
@@ -116,9 +122,47 @@ def main() -> int:
     if manifest.get("schemaSha256", "").lower() != schema_entry["sha256"].lower():
         return fail("schemaSha256 does not match tool_definitions.json")
 
+    if args.archive:
+        archive_path = args.archive.resolve()
+        if not archive_path.is_file():
+            return fail(f"archive does not exist: {archive_path}")
+        expected_files = sorted(
+            path.relative_to(root).as_posix()
+            for path in root.rglob("*")
+            if path.is_file()
+        )
+        try:
+            with zipfile.ZipFile(archive_path, "r") as archive:
+                infos = [info for info in archive.infolist() if not info.is_dir()]
+                names = [info.filename.replace("\\", "/") for info in infos]
+                if len(names) != len(set(names)):
+                    return fail("archive contains duplicate file entries")
+                for name in names:
+                    path = Path(name)
+                    if path.is_absolute() or ".." in path.parts or "\\" in name:
+                        return fail(f"archive path is unsafe: {name}")
+                if sorted(names) != expected_files:
+                    missing = sorted(set(expected_files) - set(names))
+                    extra = sorted(set(names) - set(expected_files))
+                    return fail(
+                        "archive file set differs from publish/ "
+                        f"(missing={missing[:5]}, extra={extra[:5]})"
+                    )
+                for info in infos:
+                    name = info.filename.replace("\\", "/")
+                    data = archive.read(info)
+                    current = root / Path(name)
+                    if len(data) != current.stat().st_size:
+                        return fail(f"archive size mismatch: {name}")
+                    if hashlib.sha256(data).hexdigest() != sha256(current):
+                        return fail(f"archive SHA-256 mismatch: {name}")
+        except (OSError, zipfile.BadZipFile, KeyError) as exc:
+            return fail(f"archive could not be verified: {exc}")
+
     print(
         f"release-manifest: valid version={expected_version} "
         f"artifacts={len(entries)} commit={manifest.get('sourceCommit', 'unknown')}"
+        + (f" archive={args.archive.name}" if args.archive else "")
     )
     return 0
 

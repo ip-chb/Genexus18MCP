@@ -6,6 +6,7 @@ using Xunit;
 
 namespace GxMcp.Gateway.Tests
 {
+    [Trait("Category", "ProcessSmoke")]
     public class LiveGatewayHarnessCleanupTests
     {
         [Fact]

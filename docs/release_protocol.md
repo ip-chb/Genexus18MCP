@@ -21,6 +21,9 @@ Use the one-shot script (the only implementation entrypoint):
 ./release.ps1 -Version <X.Y.Z>
 ```
 
+For a terminal or agent session that may time out, use
+`./release.ps1 -Version <X.Y.Z> -Detach` and poll the returned status path.
+
 It bumps versions, synchronizes both npm lockfiles, SDK project files, and the
 catalog-generated release metadata, commits that source state before building,
 creates the normalized `publish.zip`,
@@ -115,15 +118,19 @@ pwsh -NoProfile -File .\scripts\release-preflight.ps1 -GxPath $env:GX_PATH `
 The summary uses schema `gxmcp-release-preflight/1` and records each phase's
 `name`, `command`, `status`, `exitCode`, `durationSeconds`, timestamps, and an
 optional `reason`. It also records `sourceCommit`, `artifactFingerprint`,
-`executionMode`, and `resumedFrom` when applicable; reused phases remain
+`executionMode`, `processSmokeMode`, and `resumedFrom` when applicable; reused phases remain
 observable with `reused=true`. Contract, inventory, and script checks run before
-the expensive build/test phases. After those prerequisites, independent CLI,
-PowerShell, Nexus, and solution-test phases run in parallel. The live-artifact
-phase runs after the warning baseline because it also invokes `dotnet test`
-against the Gateway test binaries; keeping it sequenced prevents testhost and
-`bin/obj` races. The warning-baseline rebuild runs after the solution phase so
-shared MSBuild `bin/obj` outputs are never written concurrently. The summary is
-written atomically at startup and after each phase starts or completes, retaining
+the expensive build/test phases. The warning-baseline documentation parity check
+also runs in this cheap phase, so a stale generated table fails before any
+build work. After those prerequisites, independent CLI,
+PowerShell, Nexus, and non-process solution-test phases run in parallel. Tests
+that launch Gateways, sockets, or child processes are tagged `ProcessSmoke` and
+run in a dedicated serial lane after that wave. The live-artifact phase runs
+after the warning baseline because it also invokes `dotnet test` against the
+Gateway test binaries; keeping it sequenced prevents testhost and `bin/obj`
+races. The warning-baseline rebuild runs after the solution phase so shared
+MSBuild `bin/obj` outputs are never written concurrently. The summary is written
+atomically at startup and after each phase starts or completes, retaining
 `running` and terminal states if the host is interrupted. On a local Windows SDK machine, the preflight
 automatically selects `C:/KBs/KBTeste` for GeneXus 18 or `C:/KBs/KBTeste17`
 for GeneXus 17 when `GXMCP_TEST_KB` is unset. `GXMCP_TEST_FIXTURE` is optional
@@ -146,8 +153,11 @@ rerun the same version. `release.ps1` passes the previous summary back to the
 preflight and may reuse the existing build only when the version, repository
 root, source commit, selected SDK path, live inputs, and artifact fingerprint
 all match. A missing or blank fingerprint is also a mismatch and invalidates
-reuse; it is never treated as proof that artifacts are unchanged. This is a retry
-optimization, not permission to skip an individual gate.
+reuse; it is never treated as proof that artifacts are unchanged. An explicit
+`-SkipBuild` without a matching summary now fails closed. Before a valid
+`-SkipBuild` retry, the entrypoint reconciles the root and `publish/` VSIX
+copies and requires the complete fingerprint set. This is a retry optimization,
+not permission to skip an individual gate. A `-SkipBuild -SkipTests` resume additionally requires a passed certificate with every mandatory phase, a non-empty exact `ProcessSmoke` result set, and matching phase commands; a timeout, failed phase, legacy summary, or missing TRX result is not reusable evidence. The process lane runs the current Release Gateway/Worker binaries and records its selected test count.
 
 The npm workflow uses `--no-audit --no-fund`, bounds each registry probe with no
 hidden npm retries, and avoids sleeping after the final attempt. It still waits
@@ -158,9 +168,11 @@ treated as a local development-performance win.
 
 Release progress is written atomically to a status file under `%TEMP%` by
 default. Detached runs record that status path plus their stdout/stderr log
-paths in the same JSON handoff. Read it with `scripts/release-status.ps1`;
-terminal states are `succeeded` and `failed`, while exit code 2 means the run is
-still in progress or the requested wait elapsed.
+paths in the same JSON handoff. Read it with `scripts/release-status.ps1` or
+`-Json`; terminal states are `succeeded` and `failed`, while exit code 2 means
+the run is still in progress or the requested wait elapsed. The status includes
+publication state/evidence, artifact fingerprint, preflight path, and a safe
+next action.
 
 The release script synchronizes `server.json`, `config.sample.json`,
 `README.md`, `AGENTS.md`, and `docs/generated/supported-versions.md` from the
@@ -182,18 +194,42 @@ checks independently):
 ./release.ps1 -Version <X.Y.Z> -SkipBuild -SkipTests
 ```
 
-If a tag already has a GitHub Release without `publish.zip`, the same command
-resumes with an asset upload and preserves the existing release record.
+If a tag already has a GitHub Release without the complete asset set, the same
+command resumes with an asset upload and preserves the existing release record.
+A release with complete assets but a missing or failed workflow is also
+resumable through the idempotent verification path. Resume never rebuilds,
+rewrites the manifest or zip, retags, or pushes the already pinned source; it
+only reconciles missing assets and verifies publication. The normal workflow is
+triggered by `release.published`; an existing-release asset repair uses explicit
+`workflow_dispatch` rather than a duplicate `edited` run.
 
-After publishing, verify both channels:
+After the GitHub Release is created or resumed, `release.ps1` verifies required
+assets, the exact local-versus-remote SHA-256/size set, the non-draft release,
+the peeled tag commit, the exact tag/event workflow run created after the
+current asset update, and the exact npm registry version plus `gitHead` before
+it marks the release successful. The archive is checked against the staged
+manifest and publish tree before upload. Publication evidence is stored beside
+the status file as `<status>.publication.json`; status/doctor output treats
+missing, malformed, failed, or tag/commit-mismatched evidence as failure and
+redacts nested diagnostics. Legacy versions may use the documented
+`publish.zip`-only recovery path; the v3 asset set remains strict. Use
+`scripts/release-doctor.ps1 -Remote` for a read-only recovery diagnosis. The
+doctor only recommends `-SkipBuild -SkipTests` after a passed preflight whose
+root, version, source commit, SDK, live inputs, phase certificate, process TRX
+evidence, process-binary binding, and canonical artifact fingerprint all
+match; its retry command is root-qualified and includes the validated live
+path and flags.
 
-```powershell
-gh run list --workflow release.yml
-npm view genexus-mcp@latest version
-```
+Issues are closed only after the released fix is available and the publication
+checks pass. Snapshot reuse rejects malformed records and accepts an already
+closed issue only when the exact release URL comment is present. The script
+re-reads and revalidates each issue immediately before commenting and again
+before closing it, then verifies the closed state.
 
-Issues are closed only after the released fix is available. Comment on the
-issue with the release URL first, then close it.
+Repository text follows `.editorconfig` and `.gitattributes`: LF is the default,
+while `CHANGELOG.md` intentionally retains CRLF because the release merge
+contract preserves that file's historical line endings. Do not normalize the
+changelog as a side effect of release tooling.
 
 ## Merge discipline
 
@@ -320,7 +356,8 @@ default 25% threshold fail the command; override it with
 
 The machine-readable source of truth is `docs/build_warning_baseline.json`.
 Validate its shape without the SDK, or regenerate it only after reviewing a
-real Release rebuild:
+real Release rebuild. `-UpdateBaseline` atomically updates both the JSON source
+of truth and the generated Markdown block:
 
 ```powershell
 .\scripts\check-build-warning-baseline.ps1 -ValidateOnly
@@ -329,8 +366,9 @@ real Release rebuild:
 ```
 
 The release script runs the non-update check automatically and fails on
-`MSB3277` or any new `(code, file, line)` warning location. Line-only moves are
-reported as `moved` and do not hide genuinely new diagnostics.
+`MSB3277`, any new `(code, file, line)` warning location, or stale generated
+Markdown. Line-only moves are reported as `moved` and do not hide genuinely new
+diagnostics.
 
 ## npm version verification
 

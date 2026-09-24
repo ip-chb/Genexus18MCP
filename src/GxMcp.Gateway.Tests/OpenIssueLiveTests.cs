@@ -11,6 +11,7 @@ using Xunit.Sdk;
 namespace GxMcp.Gateway.Tests
 {
     [Trait("Category", "LiveE2E")]
+    [Trait("Category", "ProcessSmoke")]
     public sealed class OpenIssueLiveTests : IClassFixture<LiveGatewayHarness>, IAsyncLifetime
     {
         private readonly LiveGatewayHarness _harness;

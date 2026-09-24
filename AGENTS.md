@@ -265,6 +265,10 @@ Read only the relevant reference:
   gotchas: [`docs/agent_playbook.md`](docs/agent_playbook.md).
 - Release execution, merge discipline, npm verification, and changelog voice:
   [`docs/release_protocol.md`](docs/release_protocol.md).
+- Release interruption or failed-publication recovery: read
+  [`docs/RELEASE.md`](docs/RELEASE.md), then use `scripts/release-status.ps1`
+  and `scripts/release-doctor.ps1`; prefer `release.ps1 -Detach` and follow the
+  doctor's exact-input/fingerprint check before any `-SkipBuild` or `-SkipTests`.
 - Runtime variables: [`docs/environment_variables.md`](docs/environment_variables.md).
 - MCP/HTTP debugging: [`docs/mcp_debugging_guide.md`](docs/mcp_debugging_guide.md).
 - LLM-facing CLI/MCP operation: [`docs/llm_cli_mcp_playbook.md`](docs/llm_cli_mcp_playbook.md).

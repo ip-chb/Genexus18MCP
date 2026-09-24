@@ -35,6 +35,45 @@ namespace GxMcp.Worker.Tests
             Assert.True(result.Matches);
         }
 
+        [Theory]
+        [InlineData("Variables")]
+        [InlineData("Structure")]
+        [InlineData("Source")]
+        [InlineData("Events")]
+        public void DefaultVerification_AcceptsRenderedPartLineEndingNormalization(string partName)
+        {
+            var tolerant = WriteService.EvaluatePersistedVerification(
+                "alpha\r\nbeta", "alpha\nbeta", readTruncated: false, readFailure: null,
+                verifyMode: null, partName: partName);
+            var exact = WriteService.EvaluatePersistedVerification(
+                "alpha\r\nbeta", "alpha\nbeta", readTruncated: false, readFailure: null,
+                verifyMode: "exact", partName: partName);
+
+            Assert.True(tolerant.Matches);
+            Assert.Equal("normalization", tolerant.Reason);
+            Assert.False(exact.Matches);
+            Assert.Equal("lineEndings", exact.Reason);
+        }
+
+        [Theory]
+        [InlineData("Variables")]
+        [InlineData("Structure")]
+        [InlineData("Source")]
+        [InlineData("Events")]
+        public void FacadeBoundary_PreservesPartAndExactVerification(string partName)
+        {
+            var args = JObject.Parse($"{{\"part\":\"{partName}\",\"verifyMode\":\"exact\"}}");
+            var normalized = WriteService.NormalizeFacadeArgs(args);
+            var result = WriteService.EvaluatePersistedVerification(
+                "alpha\r\nbeta", "alpha\nbeta", readTruncated: false, readFailure: null,
+                verifyMode: normalized.VerifyMode, partName: normalized.PartName);
+
+            Assert.Equal(partName, normalized.PartName);
+            Assert.Equal("exact", normalized.VerifyMode);
+            Assert.False(result.Matches);
+            Assert.Equal("lineEndings", result.Reason);
+        }
+
         [Fact]
         public void DefaultVariablesVerification_AcceptsSdkTypeCasingNormalization()
         {

@@ -20,6 +20,7 @@ namespace GxMcp.Worker.Tests
     /// PhaseFailureExtractionTests, EdgeCaseRegressionTests, ReorgPreviewTests).
     /// These pin CURRENT behavior (bugs and all) — see report for suspected issues.
     /// </summary>
+    [Trait("Category", "ProcessSmoke")]
     public class BuildServiceTests : BuildServiceTestBase
     {
         // ── ParseTargets (private static) ───────────────────────────────────

@@ -9,6 +9,7 @@ $tests = @(
     'test-live.test.ps1',
     'test-release-entrypoint.ps1',
     'test-release-issues.ps1',
+    'test-release-contract.ps1',
     'test-release-orchestration.ps1',
     'test-release-preflight.ps1',
     'test-release-workflow.ps1',
@@ -17,7 +18,10 @@ $tests = @(
     'test-pr-review-tooling.ps1',
     'test-integration-preflight.ps1',
     'test-release-status.ps1',
+    'test-release-publication.ps1',
+    'test-release-doctor.ps1',
     'test-warning-baseline.ps1',
+    'test-line-endings.ps1',
     'test-live-matrix.test.ps1'
 )
 foreach ($name in $tests) {

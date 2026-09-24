@@ -16,6 +16,14 @@ Assert-Workflow ($workflow -match 'GITHUB_STEP_SUMMARY') 'npm publication timing
 Assert-Workflow ($workflow -match 'PROPAGATION_SECONDS') 'registry propagation duration must be measured.'
 Assert-Workflow ($workflow -match 'PUBLISH_ACCEPTED_EPOCH') 'publish acceptance timestamp must be captured.'
 Assert-Workflow ($workflow -match 'REGISTRY_VISIBLE_EPOCH') 'registry visibility timestamp must be captured.'
+Assert-Workflow ($workflow -match 'types: \[published\]') 'normal publication must use the single published event.'
+Assert-Workflow ($workflow -notmatch 'types: \[[^\]]*edited') 'edited release events must not enqueue duplicate publication runs.'
+Assert-Workflow ($workflow -match 'workflow_dispatch:') 'asset repair must retain an explicit manual workflow path.'
+Assert-Workflow ($workflow -match 'Verify published release') 'manual dispatch must verify the release state before npm publication.'
+Assert-Workflow ($workflow -match 'gh api "repos/\$\{GITHUB_REPOSITORY\}/releases/tags/\$\{TAG\}"') 'the workflow must read the target release state.'
+Assert-Workflow ($workflow -match '\.draft == false') 'the workflow must reject draft releases.'
+Assert-Workflow ($workflow -match 'nexus-ide-\$\{VERSION\}\.vsix') 'the workflow must require the versioned VSIX asset.'
+Assert-Workflow (([regex]::Matches($workflow, 'OBSERVED_VERSION')).Count -ge 2) 'both npm publication probes must capture the observed version.'
 
 $exactQueryCount = ([regex]::Matches($workflow, 'npm view "\$\{TARGET_SPEC\}" version')).Count
 Assert-Workflow ($exactQueryCount -ge 1) 'the verification query must use the exact package@version spec.'

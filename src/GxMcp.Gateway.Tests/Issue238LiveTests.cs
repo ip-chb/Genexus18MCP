@@ -9,6 +9,7 @@ namespace GxMcp.Gateway.Tests
     // Disposable live regression for issue #238. It uses only the authorized
     // scratch KB and deletes the probe object even when the move assertion fails.
     [Trait("Category", "LiveIssue")]
+    [Trait("Category", "ProcessSmoke")]
     public sealed class Issue238LiveTests : IClassFixture<LiveGatewayHarness>, IAsyncLifetime
     {
         private readonly LiveGatewayHarness _harness;

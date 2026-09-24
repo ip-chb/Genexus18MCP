@@ -2,9 +2,9 @@ name: Release
 
 on:
   release:
-    # `edited` lets a late `gh release upload publish.zip` re-trigger
-    # this workflow when the asset was missing on first publish.
-    types: [published, edited]
+    # Normal publication is triggered once by the published event. Asset repair
+    # for an existing release is explicit through workflow_dispatch.
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -81,18 +81,60 @@ jobs:
           echo "name=$NAME"       >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Verify published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${{ steps.pkg.outputs.version }}"
+          VSIX="nexus-ide-${VERSION}.vsix"
+          CHECKSUM_REQUIRED=false
+          VSIX_REQUIRED=false
+          MODERN_ASSETS=false
+          if [[ "$VERSION" == 3.* ]]; then CHECKSUM_REQUIRED=true; VSIX_REQUIRED=true; MODERN_ASSETS=true; fi
+          RELEASE_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}")"
+          jq -e \
+            --arg tag "$TAG" \
+            --arg vsix "$VSIX" \
+            --arg checksumRequired "$CHECKSUM_REQUIRED" \
+            --arg vsixRequired "$VSIX_REQUIRED" \
+            --arg modern "$MODERN_ASSETS" '
+              def one($name): ([.assets[]? | select(.name == $name)] | length) == 1;
+              def has_digest($name): any(.assets[]?;
+                .name == $name and
+                ((.digest // "") | test("^sha256:[0-9a-fA-F]{64}$")) and
+                ((.size // 0) > 0));
+              .tag_name == $tag and .draft == false and
+              one("publish.zip") and
+              (($modern != "true") or has_digest("publish.zip")) and
+              (($checksumRequired != "true") or (one("publish.zip.sha256") and has_digest("publish.zip.sha256"))) and
+              (($vsixRequired != "true") or (one($vsix) and has_digest($vsix))) and
+              all(.assets[]; .state == "uploaded")
+            ' <<<"$RELEASE_JSON" >/dev/null
+
       - name: Check npm registry
         id: npm_check
         shell: bash
         run: |
           set -euo pipefail
           CHECK_STARTED_EPOCH="$(date +%s)"
-          if npm view "${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}" version --fetch-retries=0 --fetch-timeout=5000 >/dev/null 2>&1; then
-            CHECK_ELAPSED_SECONDS=$(( $(date +%s) - CHECK_STARTED_EPOCH ))
+          OBSERVED_JSON="$(npm view "${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}" version gitHead --json --fetch-retries=0 --fetch-timeout=5000 2>/dev/null || true)"
+          OBSERVED_VERSION="$(jq -r 'if type == "array" then .[0].version // empty else .version // empty end' <<<"$OBSERVED_JSON" 2>/dev/null || true)"
+          OBSERVED_GIT_HEAD="$(jq -r 'if type == "array" then .[0].gitHead // empty else .gitHead // empty end' <<<"$OBSERVED_JSON" 2>/dev/null || true)"
+          CHECK_ELAPSED_SECONDS=$(( $(date +%s) - CHECK_STARTED_EPOCH ))
+          if [[ "$OBSERVED_VERSION" == "${{ steps.pkg.outputs.version }}" ]]; then
+            if [[ "${{ steps.pkg.outputs.version }}" == 3.* && "$OBSERVED_GIT_HEAD" != "${{ steps.source.outputs.commit }}" ]]; then
+              echo "::error::npm version $OBSERVED_VERSION is bound to '$OBSERVED_GIT_HEAD', expected '${{ steps.source.outputs.commit }}'."
+              exit 1
+            fi
             echo "already_published=true" >> "$GITHUB_OUTPUT"
             echo "Already on npm; skipping publish (registry check ${CHECK_ELAPSED_SECONDS}s)."
+          elif [[ -n "$OBSERVED_VERSION" ]]; then
+            echo "::error::npm returned '$OBSERVED_VERSION' for the exact target spec; refusing to skip or publish over a mismatched version."
+            exit 1
           else
-            CHECK_ELAPSED_SECONDS=$(( $(date +%s) - CHECK_STARTED_EPOCH ))
             echo "already_published=false" >> "$GITHUB_OUTPUT"
             echo "Exact npm version is not published yet (registry check ${CHECK_ELAPSED_SECONDS}s)."
           fi
@@ -114,8 +156,13 @@ jobs:
             exit 1
           fi
           VERSION="${{ steps.pkg.outputs.version }}"
+          VSIX="nexus-ide-${VERSION}.vsix"
           if [[ "$VERSION" == 3.* ]] && ! grep -qx 'publish.zip.sha256' <<<"$ASSETS"; then
             echo "::error title=checksum missing::Release ${{ steps.tag.outputs.tag }} must publish publish.zip.sha256 as an asset."
+            exit 1
+          fi
+          if [[ "$VERSION" == 3.* ]] && ! grep -qx "$VSIX" <<<"$ASSETS"; then
+            echo "::error title=VSIX missing::Release ${{ steps.tag.outputs.tag }} must publish $VSIX as an asset."
             exit 1
           fi
           gh release download "${{ steps.tag.outputs.tag }}" \
@@ -124,6 +171,9 @@ jobs:
           if [[ "$VERSION" == 3.* ]]; then
             gh release download "${{ steps.tag.outputs.tag }}" \
               --pattern publish.zip.sha256 \
+              --dir .
+            gh release download "${{ steps.tag.outputs.tag }}" \
+              --pattern "$VSIX" \
               --dir .
           fi
 
@@ -157,6 +207,48 @@ jobs:
           # Task 4: assert tool_definitions.json is present (version consistency validated by release.ps1)
           test -f publish/tool_definitions.json || { echo "::error::publish/tool_definitions.json missing in publish.zip — rebuild with release.ps1"; exit 1; }
           test -f publish/gxmcp-manifest.json || { echo "::error::gxmcp-manifest.json missing in publish.zip — rebuild with release.ps1"; exit 1; }
+
+      - name: Verify exact release asset bytes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.pkg.outputs.version }}"
+          VSIX="nexus-ide-${VERSION}.vsix"
+          RELEASE_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${{ steps.tag.outputs.tag }}")"
+          verify_asset() {
+            local name="$1"
+            local path="$2"
+            local require_digest="${3:-true}"
+            local count digest size actual local_size
+            count="$(jq --arg name "$name" '[.assets[]? | select(.name == $name)] | length' <<<"$RELEASE_JSON")"
+            [[ "$count" == "1" ]] || { echo "::error::Expected exactly one $name asset."; exit 1; }
+            digest="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest // empty' <<<"$RELEASE_JSON")"
+            size="$(jq --arg name "$name" -r '.assets[] | select(.name == $name) | .size // 0' <<<"$RELEASE_JSON")"
+            if [[ "$require_digest" == "true" ]]; then
+              [[ "$digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || { echo "::error::$name has no valid SHA-256 digest."; exit 1; }
+              actual="sha256:$(sha256sum "$path" | awk '{print $1}')"
+              local_size="$(stat -c '%s' "$path")"
+              [[ "$digest" == "$actual" && "$size" == "$local_size" ]] || {
+                echo "::error::$name bytes do not match the GitHub asset metadata."
+                exit 1
+              }
+            elif [[ -n "$digest" ]]; then
+              [[ "$digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || { echo "::error::$name has an invalid digest."; exit 1; }
+            fi
+          }
+          if [[ "$VERSION" == 3.* ]]; then
+            verify_asset publish.zip publish.zip true
+            verify_asset publish.zip.sha256 publish.zip.sha256 true
+            verify_asset "$VSIX" "$VSIX" true
+            cmp --silent "$VSIX" publish/nexus-ide.vsix || {
+              echo "::error::$VSIX differs from the VSIX embedded in publish.zip."
+              exit 1
+            }
+          else
+            verify_asset publish.zip publish.zip false
+          fi
 
       - name: Verify release manifest artifacts
         shell: bash
@@ -212,6 +304,7 @@ jobs:
           set -euo pipefail
           unset NODE_AUTH_TOKEN NPM_TOKEN
           TARGET_SPEC="${{ steps.pkg.outputs.name }}@${{ steps.pkg.outputs.version }}"
+          VERSION="${{ steps.pkg.outputs.version }}"
           PUBLISH_STARTED_EPOCH="$(date +%s)"
           PUBLISH_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -246,7 +339,10 @@ jobs:
           REGISTRY_VISIBLE_AT=""
 
           for i in $(seq 1 $MAX_ATTEMPTS); do
-            if npm view "${TARGET_SPEC}" version --fetch-retries=0 --fetch-timeout=$((REQUEST_TIMEOUT_SECONDS * 1000)) >/dev/null 2>&1; then
+            OBSERVED_JSON="$(npm view "${TARGET_SPEC}" version gitHead --json --fetch-retries=0 --fetch-timeout=$((REQUEST_TIMEOUT_SECONDS * 1000)) 2>/dev/null || true)"
+            OBSERVED_VERSION="$(jq -r 'if type == "array" then .[0].version // empty else .version // empty end' <<<"$OBSERVED_JSON" 2>/dev/null || true)"
+            OBSERVED_GIT_HEAD="$(jq -r 'if type == "array" then .[0].gitHead // empty else .gitHead // empty end' <<<"$OBSERVED_JSON" 2>/dev/null || true)"
+            if [[ "$OBSERVED_VERSION" == "$VERSION" && ( "$VERSION" != 3.* || "$OBSERVED_GIT_HEAD" == "${{ steps.source.outputs.commit }}" ) ]]; then
               AVAILABLE=true
               REGISTRY_VISIBLE_EPOCH="$(date +%s)"
               REGISTRY_VISIBLE_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

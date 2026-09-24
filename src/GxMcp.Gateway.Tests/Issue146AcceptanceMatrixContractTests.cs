@@ -166,6 +166,7 @@ namespace GxMcp.Gateway.Tests
     }
 
     /// <summary>Separate process smoke for the isolated stdio transport.</summary>
+    [Trait("Category", "ProcessSmoke")]
     public sealed class Issue146StdioSmokeContractTests
     {
         [Fact]
@@ -241,6 +242,15 @@ namespace GxMcp.Gateway.Tests
 
         private static string? FindGatewayExe()
         {
+            string? configured = Environment.GetEnvironmentVariable("GXMCP_LIVE_GATEWAY_EXE");
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                if (!Path.IsPathRooted(configured) || !File.Exists(configured))
+                    throw new InvalidOperationException(
+                        $"GXMCP_LIVE_GATEWAY_EXE must point to an existing absolute executable: {configured}");
+                return Path.GetFullPath(configured);
+            }
+
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
             while (directory != null)
             {

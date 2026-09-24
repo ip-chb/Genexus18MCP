@@ -1,4 +1,4 @@
-# GeneXus MCP - one-shot release script
+﻿# GeneXus MCP - one-shot release script
 # =========================================
 #
 # Why this exists: the npm publish workflow (.github/workflows/release.yml)
@@ -41,6 +41,10 @@ param(
     [switch]$DryRun,
     [switch]$SkipBuild,
     [switch]$SkipTests,
+    [string]$LiveKbPath,
+    [string]$LiveFixtureManifest,
+    [switch]$RequireLive,
+    [switch]$RequireBuildAll,
     [switch]$AllowDirty,
     # Issues explicitly completed by this release. Each issue must carry
     # fixed-pending-release, receives the release URL, and is then closed;
@@ -77,7 +81,17 @@ $OutputEncoding = $utf8
 [Console]::OutputEncoding = $utf8
 $root = $PSScriptRoot
 . (Join-Path $root 'scripts\gx-version-catalog.ps1')
+. (Join-Path $root 'scripts\release-contract.ps1')
 $gxCatalog = Get-GxVersionCatalog -Root $root
+$versionWasImplicit = [string]::IsNullOrWhiteSpace($Version)
+$statusPackagePath = Join-Path $root 'package.json'
+if (-not (Test-Path -LiteralPath $statusPackagePath -PathType Leaf)) {
+    throw "package.json not found at $statusPackagePath"
+}
+if ($versionWasImplicit) {
+    $Version = [string](Get-Content -LiteralPath $statusPackagePath -Raw | ConvertFrom-Json).version
+}
+$Version = ([string]$Version).Trim().TrimStart('v')
 $releaseDryRunBeforeIssueHelpers = $DryRun
 $releaseCloseIssuesBeforeIssueHelpers = $CloseIssues
 . (Join-Path $root 'scripts/release-issues.ps1') -DefineOnly
@@ -92,6 +106,7 @@ if ([string]::IsNullOrWhiteSpace($StatusFile)) {
 $statusState = [ordered]@{
     version = $Version
     tag = $null
+    repository = 'lennix1337/Genexus18MCP'
     phase = 'starting'
     state = 'running'
     pid = $PID
@@ -101,6 +116,15 @@ $statusState = [ordered]@{
     stderrLog = $DetachedStderrLog
     releaseUrl = $null
     workflowRunId = $null
+    publicationState = 'not-started'
+    publicationEvidencePath = "$StatusFile.publication.json"
+    publication = $null
+    publicationError = $null
+    tagCommit = $null
+    npmVersion = $null
+    artifactFingerprint = $null
+    preflightSummaryPath = $null
+    nextAction = 'inspect-status'
     exitCode = $null
     error = $null
     issues = [ordered]@{
@@ -154,44 +178,137 @@ function Get-ReleaseIssueNumbers {
     return @($values | Select-Object -Unique)
 }
 
-function Get-ReleaseArtifactFingerprint {
-    param([Parameter(Mandatory = $true)][string]$PublishDirectory)
+function Get-ReleaseFileSha256([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 
-    $relativePaths = @(
-        'GxMcp.Gateway.exe',
-        'worker/GxMcp.Worker.exe',
-        'tool_definitions.json',
-        'nexus-ide.vsix'
+function Ensure-ReleaseVsixArtifacts {
+    param(
+        [Parameter(Mandatory = $true)][string]$PublishDirectory,
+        [Parameter(Mandatory = $true)][string]$VsixPath,
+        [switch]$AllowMissing
     )
-    $parts = New-Object System.Collections.Generic.List[string]
-    foreach ($relativePath in $relativePaths) {
-        $path = Join-Path $PublishDirectory $relativePath
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
-        $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-        [void]$parts.Add(('{0}={1}' -f $relativePath, $hash))
+
+    $publishVsix = Join-Path $PublishDirectory 'nexus-ide.vsix'
+    $rootHash = Get-ReleaseFileSha256 -Path $VsixPath
+    $publishHash = Get-ReleaseFileSha256 -Path $publishVsix
+    if ($null -eq $rootHash -and $null -eq $publishHash) {
+        if ($AllowMissing) { return }
+        throw "Nexus VSIX is missing from both the release root and publish directory: $VsixPath"
     }
-    $payload = $parts -join "`n"
-    $sha = [Security.Cryptography.SHA256]::Create()
+    if ($null -ne $rootHash -and $null -ne $publishHash -and $rootHash -ne $publishHash) {
+        throw "Nexus VSIX differs between the release root and publish directory; refusing -SkipBuild reuse."
+    }
+    if ($null -ne $rootHash -and $null -eq $publishHash) {
+        Copy-Item -LiteralPath $VsixPath -Destination $publishVsix -Force
+    } elseif ($null -eq $rootHash -and $null -ne $publishHash) {
+        Copy-Item -LiteralPath $publishVsix -Destination $VsixPath -Force
+    }
+
+    $rootHash = Get-ReleaseFileSha256 -Path $VsixPath
+    $publishHash = Get-ReleaseFileSha256 -Path $publishVsix
+    if ($null -eq $rootHash -or $null -eq $publishHash -or $rootHash -ne $publishHash) {
+        throw "Nexus VSIX could not be reconciled between $VsixPath and $publishVsix."
+    }
+}
+
+function Get-ReleasePreflightInputs {
+    param([AllowNull()][string]$ArtifactFingerprint)
+
+    return Resolve-GxMcpReleasePreflightInputs `
+        -Root $root `
+        -Catalog $gxCatalog `
+        -GxPath $preflightGxPath `
+        -Version $Version `
+        -SourceCommit $releaseSourceCommit `
+        -LiveKbPath $LiveKbPath `
+        -LiveFixtureManifest $LiveFixtureManifest `
+        -RequireLive:$RequireLive `
+        -RequireBuildAll:$RequireBuildAll `
+        -ArtifactFingerprint $ArtifactFingerprint
+}
+
+function Test-ReleasePublicationAlreadyVerified {
+    param(
+        [Parameter(Mandatory = $true)][string]$Tag,
+        [Parameter(Mandatory = $true)][string]$PackageVersion,
+        [string]$RepositoryRoot
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) { $RepositoryRoot = $root }
     try {
-        return ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($payload))) -replace '-', '').ToLowerInvariant()
-    } finally {
-        $sha.Dispose()
+        $peeled = @(& git -C $RepositoryRoot ls-remote --tags origin "refs/tags/$Tag^{}" 2>$null)
+        if ($LASTEXITCODE -ne 0 -or $peeled.Count -eq 0) { return $false }
+        $commit = (($peeled[0].ToString().Trim()) -split '\s+')[0]
+        if (-not (Test-GxMcpReleaseCommitId $commit)) { return $false }
+        $releaseRaw = @(& gh release view $Tag --json tagName,isDraft,assets,url,publishedAt 2>$null)
+        if ($LASTEXITCODE -ne 0 -or $releaseRaw.Count -eq 0) { return $false }
+        $release = (($releaseRaw -join [Environment]::NewLine) | ConvertFrom-Json)
+        if ($release.tagName -cne $Tag -or $release.isDraft) { return $false }
+        $allowLegacy = $PackageVersion -notmatch '^3\.'
+        $assetState = Get-GxMcpReleaseAssetVerification -Assets @($release.assets) -RepositoryRoot $RepositoryRoot -Version $PackageVersion -AllowLegacy:$allowLegacy
+        if (-not $assetState.isValid) {
+            Write-Verbose "Release assets do not match the local transaction: $($assetState.error)"
+            return $false
+        }
+        $runs = @(& gh run list --workflow release.yml --limit 50 --json databaseId,status,conclusion,headSha,headBranch,event,createdAt 2>$null | ConvertFrom-Json)
+        $successfulRun = @($runs | Where-Object {
+            (Test-GxMcpReleaseWorkflowRun -Run $_ -ExpectedCommit $commit -Tag $Tag `
+                -MinimumCreatedAtUtc $assetState.latestUpdatedAtUtc -AllowDispatch) -and
+            [string]$_.status -eq 'completed' -and [string]$_.conclusion -eq 'success'
+        } | Sort-Object { [datetime]$_.createdAt } -Descending | Select-Object -First 1)
+        if ($successfulRun.Count -eq 0) { return $false }
+        $npmRaw = @(& npm view "genexus-mcp@$PackageVersion" version gitHead --json --fetch-retries=0 --fetch-timeout=5000 2>$null)
+        if ($LASTEXITCODE -ne 0 -or $npmRaw.Count -eq 0) { return $false }
+        $npmRecord = (($npmRaw -join [Environment]::NewLine) | ConvertFrom-Json)
+        if ($npmRecord -is [array]) { $npmRecord = @($npmRecord)[0] }
+        if ($null -eq $npmRecord -or [string]$npmRecord.version -cne $PackageVersion) { return $false }
+        if (-not $allowLegacy -and [string]$npmRecord.gitHead -cne $commit) { return $false }
+        return $true
+    } catch {
+        Write-Verbose "Could not prove that $Tag is already published: $($_.Exception.Message)"
+        return $false
     }
 }
 
 function Get-ReleaseIssueSnapshot {
+    $snapshotMatched = $false
     if (-not $DryRun -and (Test-Path -LiteralPath $releaseIssuesSnapshotPath -PathType Leaf)) {
         try {
             $existing = Get-Content -LiteralPath $releaseIssuesSnapshotPath -Raw | ConvertFrom-Json
-            if ($existing.schema -eq 'gxmcp-release-issues/1' -and
-                $existing.version -eq $Version -and $existing.tag -eq $tag) {
-                foreach ($record in @($existing.issues)) {
-                    Assert-ReleaseIssueAction -Action 'CloseAfterRelease' -IssueNumber ([int]$record.number) -IssueData $record
+            $snapshotMatched = $existing.schema -eq 'gxmcp-release-issues/1' -and
+                $existing.version -eq $Version -and $existing.tag -eq $tag
+            if ($remoteTag -and -not $snapshotMatched) {
+                throw 'existing snapshot header does not match the resumed release tag/version.'
+            }
+            if ($snapshotMatched) {
+                $snapshotShape = Test-GxMcpReleaseIssueSnapshotShape -Snapshot $existing
+                if (-not $snapshotShape.Valid) { throw "Snapshot shape is invalid: $($snapshotShape.Error)" }
+                $snapshotIssues = @($existing.issues)
+                $expectedReleaseUrl = if ($releaseUrl) { [string]$releaseUrl } else { "https://github.com/lennix1337/Genexus18MCP/releases/tag/$tag" }
+                $activeRecords = New-Object System.Collections.Generic.List[object]
+                foreach ($record in $snapshotIssues) {
+                    $issueNumber = [int]$record.number
+                    $current = Get-ReleaseIssueData -IssueNumber $issueNumber
+                    $currentState = ([string]$current.state).Trim().ToLowerInvariant()
+                    if ($currentState -eq 'closed') {
+                        if (-not (Test-ReleaseIssuePublicationComment -IssueData $current -ReleaseUrl $expectedReleaseUrl)) {
+                            throw "Issue #$issueNumber is already closed without this release's publication comment; refusing to reuse the snapshot."
+                        }
+                        Warn "Issue #$issueNumber is already closed with this release's publication comment; excluding it from the resumed release batch."
+                        continue
+                    }
+                    Assert-ReleaseIssueAction -Action 'CloseAfterRelease' -IssueNumber $issueNumber -IssueData $current
+                    $activeRecords.Add($record)
                 }
                 $script:releaseIssueSnapshotReused = $true
-                return @($existing.issues)
+                return $activeRecords.ToArray()
             }
         } catch {
+            if ($snapshotMatched -or $remoteTag) {
+                throw "Could not validate the existing release-issues.json snapshot: $($_.Exception.Message)"
+            }
             Warn "Ignoring invalid release-issues.json; rebuilding the snapshot."
         }
     }
@@ -291,18 +408,45 @@ function Write-ReleaseStatus {
         [ValidateSet('running', 'succeeded', 'failed')][string]$State = 'running',
         [string]$ReleaseUrl,
         [string]$WorkflowRunId,
+        [ValidateSet('not-started', 'pending', 'verified', 'failed')][string]$PublicationState,
+        [string]$PublicationEvidencePath,
+        [string]$PublicationError,
+        [string]$TagCommit,
+        [string]$NpmVersion,
+        [string]$ArtifactFingerprint,
+        [string]$PreflightSummaryPath,
+        [string]$NextAction,
         [int]$ExitCode,
         [string]$ErrorMessage,
         [int]$ProcessId
     )
     try {
+        if ($null -eq $statusState.publication -and (Test-Path -LiteralPath $StatusFile -PathType Leaf)) {
+            try {
+                $persisted = Get-Content -LiteralPath $StatusFile -Raw | ConvertFrom-Json
+                if ($persisted.PSObject.Properties.Name -contains 'publication' -and $null -ne $persisted.publication) {
+                    $statusState.publication = $persisted.publication
+                }
+            } catch { }
+        }
         if ($PSBoundParameters.ContainsKey('Phase')) { $statusState.phase = $Phase }
         if ($PSBoundParameters.ContainsKey('State')) { $statusState.state = $State }
         if ($PSBoundParameters.ContainsKey('ReleaseUrl')) { $statusState.releaseUrl = $ReleaseUrl }
         if ($PSBoundParameters.ContainsKey('WorkflowRunId')) { $statusState.workflowRunId = $WorkflowRunId }
+        if ($PSBoundParameters.ContainsKey('PublicationState')) { $statusState.publicationState = $PublicationState }
+        if ($PSBoundParameters.ContainsKey('PublicationEvidencePath')) { $statusState.publicationEvidencePath = $PublicationEvidencePath }
+        if ($PSBoundParameters.ContainsKey('PublicationError')) { $statusState.publicationError = $PublicationError }
+        if ($PSBoundParameters.ContainsKey('TagCommit')) { $statusState.tagCommit = $TagCommit }
+        if ($PSBoundParameters.ContainsKey('NpmVersion')) { $statusState.npmVersion = $NpmVersion }
+        if ($PSBoundParameters.ContainsKey('ArtifactFingerprint')) { $statusState.artifactFingerprint = $ArtifactFingerprint }
+        if ($PSBoundParameters.ContainsKey('PreflightSummaryPath')) { $statusState.preflightSummaryPath = $PreflightSummaryPath }
+        if ($PSBoundParameters.ContainsKey('NextAction')) { $statusState.nextAction = $NextAction }
         if ($PSBoundParameters.ContainsKey('ExitCode')) { $statusState.exitCode = $ExitCode }
-        if ($PSBoundParameters.ContainsKey('ErrorMessage')) { $statusState.error = $ErrorMessage }
+        if ($PSBoundParameters.ContainsKey('ErrorMessage')) { $statusState.error = Protect-GxMcpReleaseMessage $ErrorMessage }
         if ($PSBoundParameters.ContainsKey('ProcessId')) { $statusState.pid = $ProcessId }
+        if ($null -ne $statusState.error) { $statusState.error = Protect-GxMcpReleaseMessage $statusState.error }
+        if ($null -ne $statusState.publicationError) { $statusState.publicationError = Protect-GxMcpReleaseMessage $statusState.publicationError }
+        if ($null -ne $statusState.publication) { $statusState.publication = Get-GxMcpSafeReleaseValue $statusState.publication }
         $statusState.version = $Version
         $statusState.tag = $tag
         $statusState.updatedAtUtc = [DateTime]::UtcNow.ToString('o')
@@ -326,15 +470,16 @@ function Step([string]$msg) { Write-Host "`n>>> $msg" -ForegroundColor Cyan; Wri
 function Ok  ([string]$msg) { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Warn([string]$msg) { Write-Host "    [!]  $msg" -ForegroundColor Yellow }
 function Fail([string]$msg) {
-    Write-Host "    [ERR] $msg" -ForegroundColor Red
-    Write-ReleaseStatus -Phase 'failed' -State 'failed' -ExitCode 1 -ErrorMessage $msg
+    $safeMessage = Protect-GxMcpReleaseMessage $msg
+    Write-Host "    [ERR] $safeMessage" -ForegroundColor Red
+    Write-ReleaseStatus -Phase 'failed' -State 'failed' -ExitCode 1 -ErrorMessage $safeMessage
     exit 1
 }
 
 trap {
-    $message = $_.Exception.Message
+    $message = Protect-GxMcpReleaseMessage $_.Exception.Message
     Write-ReleaseStatus -Phase 'failed' -State 'failed' -ExitCode 1 -ErrorMessage $message
-    throw
+    throw $message
 }
 
 function Get-ForwardedArgs {
@@ -375,6 +520,8 @@ function Close-ReleaseIssues {
         $statusState.issues.validated = @($issues)
         Write-ReleaseStatus -Phase 'release-issues-prevalidated' -State 'running'
     }
+    # Keep issue mutations serial: comment -> close -> verify is a correctness
+    # boundary, and parallel GitHub mutations would make retries harder to reason about.
     foreach ($issue in $issues) {
         if ($issue -le 0) { Fail "Issue number must be positive: $issue" }
         if ($DryRun) {
@@ -382,9 +529,20 @@ function Close-ReleaseIssues {
             continue
         }
 
+        # Re-read immediately before each mutation; labels/state can change after the batch preflight.
+        $current = Get-ReleaseIssueData -IssueNumber $issue
+        try { Assert-ReleaseIssueAction -Action 'CloseAfterRelease' -IssueNumber $issue -IssueData $current }
+        catch { Fail $_.Exception.Message }
         Invoke-Cmd 'gh' @('issue', 'comment', [string]$issue, '--body', "Released in $ReleaseUrl")
+        $commented = Get-ReleaseIssueData -IssueNumber $issue
+        if (-not (Test-ReleaseIssuePublicationComment -IssueData $commented -ReleaseUrl $ReleaseUrl)) {
+            Fail "Issue #$issue did not expose the exact release publication comment after posting."
+        }
         $statusState.issues.commented = @($statusState.issues.commented + $issue | Select-Object -Unique)
         Write-ReleaseStatus -Phase "issue-$issue-commented" -State 'running'
+        $current = Get-ReleaseIssueData -IssueNumber $issue
+        try { Assert-ReleaseIssueAction -Action 'CloseAfterRelease' -IssueNumber $issue -IssueData $current }
+        catch { Fail "Issue #$issue changed before closure: $($_.Exception.Message)" }
         Invoke-Cmd 'gh' @('issue', 'close', [string]$issue, '--reason', 'completed')
         $verifiedState = ([string](Get-ReleaseIssueData -IssueNumber $issue).state).Trim().ToLowerInvariant()
         if ($verifiedState -ne 'closed') {
@@ -552,16 +710,14 @@ if (-not (Test-Path $pkgPath)) { Fail "package.json not found at $pkgPath" }
 $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
 $currentVersion = $pkg.version
 
-if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = $currentVersion
+if ($versionWasImplicit) {
     Warn "No -Version passed; using package.json: $Version"
-} else {
-    $Version = $Version -replace '^v', ''
 }
 if (-not (Test-StrictSemVer $Version)) {
     Fail "Version '$Version' is not strict semver (X.Y.Z[-prerelease][+build])."
 }
 $tag = "v$Version"
+$allowLegacyAssets = $Version -notmatch '^3\.'
 $numericVersion = ([regex]::Match($Version, '^\d+\.\d+\.\d+')).Value
 Ok "Target version: $Version  (tag: $tag)"
 
@@ -700,20 +856,40 @@ if ($status -and -not $AllowDirty) {
 Ok "Tree state acceptable."
 
 # Verify tag isn't already on remote - and if it is, decide between abort and
-# resume. A tag on origin WITH a publish.zip-carrying release means this
-# version already shipped -> abort. A tag on origin WITHOUT that asset means a
-# previous run died between `git push` and `gh release create` -> resume from
-# the release-creation step against the existing tagged commit.
+# resume. A complete successful publication is immutable and aborts. A release
+# with assets but an incomplete/failed workflow is resumable, which avoids the
+# old dead end where a post-create workflow failure could not be retried.
 $resumeRelease = $false
 $releaseExists = $false
+$existingAssetsComplete = $false
+$remoteAssetsNeedRepair = $false
+$publicationAlreadyVerified = $false
 if ($remoteTag) {
-    $assetNames = @(gh release view $tag --json assets --jq '.assets[].name' 2>$null)
-    if ($LASTEXITCODE -eq 0) { $releaseExists = $true }
-    if ($releaseExists -and ($assetNames -contains 'publish.zip')) {
-        Fail "Tag $tag already exists on origin and release $tag already has publish.zip. Bump the version (or delete the remote tag + release first)."
+    $remoteReleaseRaw = @(gh release view $tag --json tagName,isDraft,assets 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $remoteReleaseRaw.Count -gt 0) { $releaseExists = $true }
+    $remoteRelease = if ($releaseExists) { (($remoteReleaseRaw -join [Environment]::NewLine) | ConvertFrom-Json) } else { $null }
+    $assetNames = if ($releaseExists) { @($remoteRelease.assets | ForEach-Object { [string]$_.name }) } else { @() }
+    $requiredReleaseAssets = @(Get-GxMcpReleaseRequiredAssetNames -Version $Version -AllowLegacy:$allowLegacyAssets)
+    $hasCompleteAssetSet = $releaseExists -and @($requiredReleaseAssets | Where-Object { $assetNames -notcontains $_ }).Count -eq 0
+    $remoteAssetState = if ($releaseExists) {
+        Get-GxMcpReleaseAssetVerification -Assets @($remoteRelease.assets) -RepositoryRoot $root -Version $Version -AllowLegacy:$allowLegacyAssets
+    } else { $null }
+    $remoteAssetsNeedRepair = $hasCompleteAssetSet -and ($null -eq $remoteAssetState -or -not $remoteAssetState.isValid)
+    $existingAssetsComplete = $hasCompleteAssetSet -and -not $remoteAssetsNeedRepair
+    $publicationAlreadyVerified = $existingAssetsComplete -and (Test-ReleasePublicationAlreadyVerified -Tag $tag -PackageVersion $Version)
+    if ($publicationAlreadyVerified -and @($CloseIssues).Count -eq 0) {
+        Fail "Tag $tag already has a successful publication workflow, exact assets, and exact npm version. Bump the version (or delete the remote tag + release first)."
     }
     if ($releaseExists) {
-        Warn "Tag $tag exists on origin and release $tag exists but has NO publish.zip asset - resuming: will upload the asset to the existing release."
+        if ($publicationAlreadyVerified) {
+            Warn "Tag $tag is already published; resuming the remaining issue-closure step without creating a duplicate publication."
+        } elseif ($remoteAssetsNeedRepair) {
+            Warn "Tag $tag has remote assets that do not match the local transaction; resuming with an explicit asset repair."
+        } elseif ($hasCompleteAssetSet) {
+            Warn "Tag $tag has complete release assets but publication is not fully verified - resuming the idempotent workflow/verification path."
+        } else {
+            Warn "Tag $tag exists on origin with incomplete release assets - resuming: will upload the missing assets."
+        }
     } else {
         Warn "Tag $tag exists on origin but no GitHub release was created - resuming from the release-creation step."
     }
@@ -827,7 +1003,9 @@ $needsBump = $changelogNeedsPromotion -or
 if ($needsBump -and ($Version -eq $currentVersion) -and ($csprojVersion -ne $Version)) {
     Warn "csproj InformationalVersion=$csprojVersion is out of sync with package.json=$Version - forcing bump pass to realign."
 }
-if ($needsBump) {
+if ($resumeRelease) {
+    Ok "Release metadata is already committed; skipping version mutation during resume."
+} elseif ($needsBump) {
     $stepLabel = if ($Version -ne $currentVersion) {
         "Bumping version: $currentVersion -> $Version"
     } elseif ($changelogNeedsPromotion) {
@@ -943,6 +1121,10 @@ if ($resumeRelease) {
         if ([string]::IsNullOrWhiteSpace($releaseSourceCommit)) {
             Fail "Could not resolve the existing tag $tag while resuming the release."
         }
+        $resumeHead = (git rev-parse HEAD).Trim()
+        if ($resumeHead -ne $releaseSourceCommit) {
+            Fail "Cannot resume $tag from HEAD $resumeHead because the tag is pinned to $releaseSourceCommit."
+        }
         Ok "Resuming from tagged source commit: $releaseSourceCommit"
     }
 } elseif (-not $DryRun) {
@@ -986,16 +1168,9 @@ $preflightGxPath = if (-not [string]::IsNullOrWhiteSpace($env:GX_PATH)) { $env:G
 if (-not $DryRun -and -not $SkipBuild -and -not $SkipTests -and (Test-Path -LiteralPath $preflightSummaryPath -PathType Leaf)) {
     try {
         $priorPreflight = Get-Content -LiteralPath $preflightSummaryPath -Raw | ConvertFrom-Json
-        $currentArtifactFingerprint = Get-ReleaseArtifactFingerprint -PublishDirectory (Join-Path $root 'publish')
-        $canResumeBuild = $priorPreflight.schemaVersion -eq 'gxmcp-release-preflight/1' -and
-            $priorPreflight.status -in @('failed', 'running', 'passed') -and
-            [string]$priorPreflight.root -eq [string]$root -and
-            [string]$priorPreflight.version -eq [string]$Version -and
-            [string]$priorPreflight.sourceCommit -eq [string]$releaseSourceCommit -and
-            [string]$priorPreflight.gxPath -eq [string]$preflightGxPath -and
-            $null -ne $currentArtifactFingerprint -and
-            -not [string]::IsNullOrWhiteSpace([string]$priorPreflight.artifactFingerprint) -and
-            [string]$priorPreflight.artifactFingerprint -eq [string]$currentArtifactFingerprint
+        $currentArtifactFingerprint = Get-GxMcpReleaseArtifactFingerprint -RepositoryRoot $root -Version $Version -AllowLegacy:$allowLegacyAssets
+        $expectedPreflightInputs = Get-ReleasePreflightInputs -ArtifactFingerprint $currentArtifactFingerprint
+        $canResumeBuild = Test-GxMcpReleasePreflightCompatibility -Summary $priorPreflight -Expected $expectedPreflightInputs
         if ($canResumeBuild) {
             $SkipBuild = $true
             Warn "Reusing publish/ and VSIX from the matching preflight summary; build will not be repeated."
@@ -1026,7 +1201,8 @@ if (-not $SkipBuild) {
 $publishDir = Join-Path $root 'publish'
 $requiredArtefacts = @(
     'GxMcp.Gateway.exe',
-    'worker\GxMcp.Worker.exe'
+    'worker\GxMcp.Worker.exe',
+    'tool_definitions.json'
 )
 foreach ($rel in $requiredArtefacts) {
     $path = Join-Path $publishDir $rel
@@ -1069,11 +1245,52 @@ if (-not $SkipBuild) {
 } else {
     Warn "-SkipBuild set; reusing existing $vsixPath if present."
 }
+if ($DryRun) {
+    Warn "[DRY-RUN] would reconcile the Nexus VSIX between the release root and publish directory."
+} else {
+    try {
+        Ensure-ReleaseVsixArtifacts -PublishDirectory $publishDir -VsixPath $vsixPath -AllowMissing:$allowLegacyAssets
+        if ($allowLegacyAssets -and -not (Test-Path -LiteralPath $vsixPath -PathType Leaf) -and -not (Test-Path -LiteralPath (Join-Path $publishDir 'nexus-ide.vsix') -PathType Leaf)) {
+            Ok "Legacy release does not require a Nexus VSIX asset."
+        } else {
+            Ok "Nexus VSIX is synchronized between the release root and publish directory."
+        }
+    } catch {
+        Fail $_.Exception.Message
+    }
+    $publishVsixPath = Join-Path $publishDir 'nexus-ide.vsix'
+    if (-not $allowLegacyAssets -and -not (Test-Path -LiteralPath $publishVsixPath -PathType Leaf)) {
+        Fail 'Required publish artifact missing after VSIX reconciliation: nexus-ide.vsix'
+    }
+    if ($SkipBuild) {
+        $skipBuildEvidenceValid = $false
+        try {
+            if (Test-Path -LiteralPath $preflightSummaryPath -PathType Leaf) {
+                $skipBuildSummary = Get-Content -LiteralPath $preflightSummaryPath -Raw | ConvertFrom-Json
+                $currentSkipBuildFingerprint = Get-GxMcpReleaseArtifactFingerprint -RepositoryRoot $root -Version $Version -AllowLegacy:$allowLegacyAssets
+                $expectedPreflightInputs = Get-ReleasePreflightInputs -ArtifactFingerprint $currentSkipBuildFingerprint
+                $skipBuildEvidenceValid = if ($SkipTests) {
+                    Test-GxMcpReleasePreflightCertificate -Summary $skipBuildSummary -Expected $expectedPreflightInputs
+                } else {
+                    Test-GxMcpReleasePreflightCompatibility -Summary $skipBuildSummary -Expected $expectedPreflightInputs
+                }
+            }
+        } catch { }
+        if (-not $skipBuildEvidenceValid) {
+            Fail "-SkipBuild requires a matching artifact fingerprint and preflight inputs; -SkipTests additionally requires a complete passed preflight certificate."
+        }
+        Ok "Skip-build reuse validated against the matching preflight inputs."
+    }
+    $statusState.artifactFingerprint = Get-GxMcpReleaseArtifactFingerprint -RepositoryRoot $root -Version $Version -AllowLegacy:$allowLegacyAssets
+    $statusState.preflightSummaryPath = $preflightSummaryPath
+    Write-ReleaseStatus -Phase 'artifacts-ready' -State 'running' -ArtifactFingerprint $statusState.artifactFingerprint `
+        -PreflightSummaryPath $preflightSummaryPath -NextAction 'run-preflight'
+}
 
 # -- 4. Optional test pass -------------------------------------------------
 if (-not $SkipTests) {
     Step "Running complete release preflight"
-    Invoke-Cmd 'pwsh' @(
+    $releasePreflightArgs = @(
         '-NoProfile',
         '-File', (Join-Path $root 'scripts/release-preflight.ps1'),
         '-Version', $Version,
@@ -1081,6 +1298,11 @@ if (-not $SkipTests) {
         '-SummaryPath', $preflightSummaryPath,
         '-ResumeSummaryPath', $preflightSummaryPath
     )
+    if (-not [string]::IsNullOrWhiteSpace($LiveKbPath)) { $releasePreflightArgs += @('-LiveKbPath', $LiveKbPath) }
+    if (-not [string]::IsNullOrWhiteSpace($LiveFixtureManifest)) { $releasePreflightArgs += @('-LiveFixtureManifest', $LiveFixtureManifest) }
+    if ($RequireLive) { $releasePreflightArgs += '-RequireLive' }
+    if ($RequireBuildAll) { $releasePreflightArgs += '-RequireBuildAll' }
+    Invoke-Cmd 'pwsh' $releasePreflightArgs
     if ($DryRun) { Warn '[DRY-RUN] would run the complete release preflight.' } else { Ok 'Complete release preflight passed.' }
 } else {
     Warn "-SkipTests set; preflight is intentionally skipped (warning baseline still runs)."
@@ -1142,16 +1364,20 @@ if (-not $DryRun) {
 # Corporate installers validate this manifest inside publish.zip before any
 # existing installation is moved. The shared writer keeps local candidate and
 # maintainer release manifests identical, including the packaged VSIX hash.
-Step "Writing release manifest"
-Invoke-Cmd 'pwsh' @(
-    '-NoProfile',
-    '-File', (Join-Path $root 'scripts\write-release-manifest.ps1'),
-    '-PublishDirectory', $publishDir,
-    '-Version', $Version,
-    '-SourceRoot', $root,
-    '-SourceCommit', $releaseSourceCommit
-)
-if ($DryRun) { Warn "[DRY-RUN] would write gxmcp-manifest.json for $Version." } else { Ok "gxmcp-manifest.json written for $Version." }
+if ($resumeRelease) {
+    Step "Verifying existing release manifest"
+} else {
+    Step "Writing release manifest"
+    Invoke-Cmd 'pwsh' @(
+        '-NoProfile',
+        '-File', (Join-Path $root 'scripts\write-release-manifest.ps1'),
+        '-PublishDirectory', $publishDir,
+        '-Version', $Version,
+        '-SourceRoot', $root,
+        '-SourceCommit', $releaseSourceCommit
+    )
+    if ($DryRun) { Warn "[DRY-RUN] would write gxmcp-manifest.json for $Version." } else { Ok "gxmcp-manifest.json written for $Version." }
+}
 Step "Verifying release manifest"
 Invoke-Cmd 'python' @(
     (Join-Path $root 'scripts\verify-release-manifest.py'),
@@ -1165,7 +1391,17 @@ if ($DryRun) { Warn '[DRY-RUN] would verify release manifest artifacts.' } else 
 Step "Packing publish.zip"
 $zipPath = Join-Path $root 'publish.zip'
 $shaPath = "$zipPath.sha256"
-if (-not $DryRun) {
+if ($resumeRelease) {
+    if (-not (Test-Path -LiteralPath $zipPath -PathType Leaf) -or -not (Test-Path -LiteralPath $shaPath -PathType Leaf)) {
+        Fail 'Cannot resume the release because publish.zip or publish.zip.sha256 is missing.'
+    }
+    $resumeZipHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $resumeDeclaredHash = (Get-Content -LiteralPath $shaPath -Raw).Trim().Split()[0].ToLowerInvariant()
+    if ($resumeZipHash -ne $resumeDeclaredHash) {
+        Fail 'Cannot resume the release because publish.zip does not match publish.zip.sha256.'
+    }
+    Ok "Existing publish.zip and checksum reused ($resumeZipHash)."
+} elseif (-not $DryRun) {
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     if (Test-Path $shaPath) { Remove-Item $shaPath -Force }
     Add-Type -AssemblyName System.IO.Compression
@@ -1188,12 +1424,43 @@ if (-not $DryRun) {
 } else {
     Ok "[dry-run] would create publish.zip + publish.zip.sha256"
 }
+if (-not $DryRun) {
+    Step 'Verifying publish.zip against the release manifest'
+    Invoke-Cmd 'python' @(
+        (Join-Path $root 'scripts\verify-release-manifest.py'),
+        $publishDir,
+        '--version', $Version,
+        '--source-commit', $releaseSourceCommit,
+        '--archive', $zipPath
+    )
+    Ok 'publish.zip matches the staged release manifest and publish tree.'
+}
 
 # -- 6. Confirm packaging did not alter the committed source ----------------
 # publish/, publish.zip, the VSIX, and the checksum are generated/ignored.
 # Any other change means the artifact no longer corresponds to the source
 # commit captured in the manifest and must stop the release.
-if (-not $DryRun) {
+if ($resumeRelease) {
+    Step "Verifying existing tag and source state"
+    if (-not $DryRun) {
+        $pendingResume = @(git status --porcelain --untracked-files=no)
+        if ($pendingResume) {
+            Write-Host ($pendingResume -join "`n")
+            Fail "Cannot resume $tag with a dirty source tree. Clean or commit the pending changes first."
+        }
+        $headAfterPackage = (git rev-parse HEAD).Trim()
+        $localTagCommit = (git rev-list -n 1 $tag).Trim()
+        if ($headAfterPackage -ne $releaseSourceCommit -or $localTagCommit -ne $releaseSourceCommit) {
+            Fail "Resume source mismatch: HEAD=$headAfterPackage localTag=$localTagCommit expected=$releaseSourceCommit."
+        }
+        $remoteResumeTag = @(git ls-remote --tags origin "refs/tags/$tag^{}" 2>$null)
+        if ($LASTEXITCODE -ne 0 -or $remoteResumeTag.Count -eq 0 -or
+            ((($remoteResumeTag[0].ToString().Trim()) -split '\s+')[0]) -ne $releaseSourceCommit) {
+            Fail "Remote tag $tag is not pinned to the expected source commit $releaseSourceCommit."
+        }
+    }
+    Ok "Existing tag and source state reused for $tag."
+} elseif (-not $DryRun) {
     $pendingAfterPackage = @(git status --porcelain --untracked-files=no)
     if ($pendingAfterPackage) {
         Write-Host ($pendingAfterPackage -join "`n")
@@ -1209,15 +1476,20 @@ if (-not $DryRun) {
 }
 
 # -- 7. Tag (annotated) + push ---------------------------------------------
-Step "Tagging $tag"
-Invoke-Cmd 'git' @('tag', '-a', $tag, $releaseSourceCommit, '-m', "$tag")
-if ($DryRun) { Warn "[DRY-RUN] would create local tag $tag." } else { Ok 'Local tag created.' }
+if ($resumeRelease) {
+    Step "Reusing existing tag $tag"
+    if ($DryRun) { Warn "[DRY-RUN] would reuse the existing tag $tag." } else { Ok 'Existing local and remote tag reused.' }
+} else {
+    Step "Tagging $tag"
+    Invoke-Cmd 'git' @('tag', '-a', $tag, $releaseSourceCommit, '-m', "$tag")
+    if ($DryRun) { Warn "[DRY-RUN] would create local tag $tag." } else { Ok 'Local tag created.' }
 
-if (-not $DryRun) {
-    Step "Pushing main + $tag to origin"
-    Invoke-Cmd 'git' @('push', 'origin', 'HEAD')
-    Invoke-Cmd 'git' @('push', 'origin', $tag)
-    Ok "Pushed."
+    if (-not $DryRun) {
+        Step "Pushing main + $tag to origin"
+        Invoke-Cmd 'git' @('push', 'origin', 'HEAD')
+        Invoke-Cmd 'git' @('push', 'origin', $tag)
+        Ok "Pushed."
+    }
 }
 
 # -- 8. Extract release notes from CHANGELOG (best-effort) -----------------
@@ -1259,7 +1531,12 @@ $assetArgs = @($zipPath)
 if (Test-Path $shaPath) { $assetArgs += $shaPath }
 # Attach the Nexus IDE VSIX - ships in lockstep with the MCP release.
 if ($DryRun -or (Test-Path $vsixPath)) { $assetArgs += $vsixPath }
-if ($releaseExists) {
+if ($releaseExists -and $existingAssetsComplete) {
+    $releaseUrl = "https://github.com/lennix1337/Genexus18MCP/releases/tag/$tag"
+    Ok "Existing GitHub Release assets reused: $releaseUrl"
+    Write-ReleaseStatus -Phase 'release-assets-reused' -State 'running' -ReleaseUrl $releaseUrl `
+        -PublicationState 'pending' -NextAction 'verify-publication'
+} elseif ($releaseExists) {
     Step "Uploading assets to existing GitHub release $tag"
     $uploadArgs = @('release', 'upload', $tag, '--clobber') + $assetArgs
     Invoke-Cmd 'gh' $uploadArgs
@@ -1268,7 +1545,8 @@ if ($releaseExists) {
     } else {
         $releaseUrl = "https://github.com/lennix1337/Genexus18MCP/releases/tag/$tag"
         Ok "Release assets uploaded: $releaseUrl"
-        Write-ReleaseStatus -Phase 'release-assets-uploaded' -State 'running' -ReleaseUrl $releaseUrl
+        Write-ReleaseStatus -Phase 'release-assets-uploaded' -State 'running' -ReleaseUrl $releaseUrl `
+            -PublicationState 'pending' -NextAction 'verify-publication'
     }
 } else {
     Step "Creating GitHub release $tag (with publish.zip)"
@@ -1284,53 +1562,73 @@ if ($releaseExists) {
     } else {
         $releaseUrl = "https://github.com/lennix1337/Genexus18MCP/releases/tag/$tag"
         Ok "Release created: $releaseUrl"
-        Write-ReleaseStatus -Phase 'release-created' -State 'running' -ReleaseUrl $releaseUrl
+        Write-ReleaseStatus -Phase 'release-created' -State 'running' -ReleaseUrl $releaseUrl `
+            -PublicationState 'pending' -NextAction 'verify-publication'
     }
 }
 if (Test-Path -LiteralPath $notesTmp) { Remove-Item -LiteralPath $notesTmp -Force -ErrorAction SilentlyContinue }
 
+# Verify the complete publication transaction before mutating issue state. The
+# release script creates the GitHub Release synchronously, but npm publication
+# is owned by the trusted workflow and may still be propagating.
+if (-not $DryRun) {
+    Step "Verifying GitHub Release and npm publication"
+    $publicationArgs = @(
+        '-NoProfile', '-File', (Join-Path $root 'scripts\verify-release-publication.ps1'),
+        '-Tag', $tag,
+        '-Version', $Version,
+        '-ExpectedCommit', $releaseSourceCommit,
+        '-EvidencePath', $statusState.publicationEvidencePath,
+        '-StatusFile', $StatusFile,
+        '-TimeoutSeconds', '900',
+        '-PollSeconds', '10'
+    )
+    if ($releaseExists) { $publicationArgs += '-DispatchIfMissing' }
+    Invoke-Cmd 'pwsh' $publicationArgs
+    $publicationEvidence = Get-Content -LiteralPath $statusState.publicationEvidencePath -Raw | ConvertFrom-Json
+    $statusState.publication = $publicationEvidence
+    $statusState.publicationState = 'verified'
+    $statusState.publicationError = $null
+    $statusState.releaseUrl = [string]$publicationEvidence.releaseUrl
+    $statusState.workflowRunId = [string]$publicationEvidence.workflowRunId
+    $statusState.tagCommit = [string]$publicationEvidence.tagCommit
+    $statusState.npmVersion = [string]$publicationEvidence.npmVersion
+    $publicationCheck = Test-GxMcpReleasePublicationEvidence -Status $statusState -Publication $publicationEvidence -RepositoryRoot $root -AllowLegacy:$allowLegacyAssets
+    if (-not $publicationCheck.Valid) {
+        Fail "Publication evidence failed the local contract recheck: $($publicationCheck.Error)"
+    }
+    $statusState.nextAction = if (@($CloseIssues).Count -gt 0) { 'close-issues' } else { 'complete' }
+    Write-ReleaseStatus -Phase 'publication-verified' -State 'running' -PublicationState 'verified' `
+        -PublicationEvidencePath $statusState.publicationEvidencePath -TagCommit $statusState.tagCommit `
+        -NpmVersion $statusState.npmVersion -WorkflowRunId $statusState.workflowRunId `
+        -ReleaseUrl $statusState.releaseUrl -NextAction $statusState.nextAction
+    Ok "Publication verified: workflow #$($statusState.workflowRunId), npm $($statusState.npmVersion)."
+}
+
 # Close only issues explicitly associated with this release, and only after
-# GitHub confirmed the release operation above. This keeps issue state tied to
-# an available artifact rather than to a merge or a changelog mention.
+# GitHub assets, the publish workflow, and npm visibility have been verified.
 if (@($CloseIssues).Count -gt 0) {
     Step "Closing released issues"
     $issueReleaseUrl = if ($releaseUrl) { $releaseUrl } else { "https://github.com/lennix1337/Genexus18MCP/releases/tag/$tag" }
     Close-ReleaseIssues -ReleaseUrl $issueReleaseUrl
 }
 
-# Belt-and-suspenders: verify the publish workflow started, or trigger it manually.
-# Normally the `release.published` event starts the workflow automatically.
-# We check if an active run already exists before dispatching, avoiding
-# unnecessary concurrent duplicate runs while retaining the automatic backfill.
-if (-not $DryRun) {
-    Step "Verifying publish workflow trigger"
-    Start-Sleep -Seconds 5  # let GitHub register the release event
-    $activeRun = $null
-    try {
-        $recentRuns = gh run list --workflow release.yml --limit 5 --json status,conclusion,databaseId 2>$null | ConvertFrom-Json
-        $activeRun = $recentRuns | Where-Object { $_.status -in @('queued', 'in_progress', 'waiting') } | Select-Object -First 1
-    } catch { }
-
-    if ($activeRun) {
-        Ok "Publish workflow #$($activeRun.databaseId) is already active (triggered by release event)."
-        Write-ReleaseStatus -Phase 'workflow-running' -State 'running' -WorkflowRunId ([string]$activeRun.databaseId)
-    } else {
-        Warn "No active workflow detected after 5s - dispatching manually as fallback."
-        Invoke-Cmd 'gh' @('workflow', 'run', 'release.yml', '-f', "tag=$tag")
-        Ok "Workflow dispatched."
-    }
+Write-Host ""
+if ($DryRun) {
+    Write-Host "    Dry run: inspect the planned workflow and npm verification manually." -ForegroundColor Cyan
+    Write-Host "      gh run list --workflow release.yml" -ForegroundColor Gray
+    Write-Host "      npm view genexus-mcp@$Version version" -ForegroundColor Gray
+} else {
+    Write-Host "    Publication evidence: $($statusState.publicationEvidencePath)" -ForegroundColor DarkGray
+    Write-Host "    npm exact version: $($statusState.npmVersion)" -ForegroundColor DarkGray
 }
-Write-Host ""
-Write-Host "    Watch the publish workflow:" -ForegroundColor Cyan
-Write-Host "      gh run watch --workflow=release.yml" -ForegroundColor Gray
-Write-Host ""
-Write-Host "    Verify on npm (~2-3 min):" -ForegroundColor Cyan
-Write-Host "      npm view genexus-mcp@$Version version" -ForegroundColor Gray
 Write-Host ""
 
 if ($DryRun) {
+    $statusState.nextAction = 'run-real-release'
     Warn "DRY RUN - no remote changes were made. Re-run without -DryRun to publish."
-    Write-ReleaseStatus -Phase 'dry-run-complete' -State 'succeeded' -ExitCode 0
+    Write-ReleaseStatus -Phase 'dry-run-complete' -State 'succeeded' -ExitCode 0 -NextAction $statusState.nextAction
 } else {
-    Write-ReleaseStatus -Phase 'complete' -State 'succeeded' -ExitCode 0
+    $statusState.nextAction = 'complete'
+    Write-ReleaseStatus -Phase 'complete' -State 'succeeded' -ExitCode 0 -NextAction $statusState.nextAction
 }

@@ -1,4 +1,3 @@
-using GxMcp.Gateway.Routers;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -7,19 +6,26 @@ namespace GxMcp.Gateway.Tests
     public sealed class PropertiesRouterBatchTests
     {
         [Fact]
-        public void PropertiesGet_ForwardsBatchTargetsToWorkerEnvelope()
+        public void PropertiesGet_ForwardsBatchTargetsThroughWorkerEnvelope()
         {
-            var router = new PropertiesRouter();
-            var args = JObject.Parse(@"{
+            var request = new JObject
+            {
+                ["method"] = "tools/call",
+                ["params"] = new JObject
+                {
+                    ["name"] = "genexus_properties",
+                    ["arguments"] = JObject.Parse(@"{
   ""action"": ""get"",
   ""targets"": [
     { ""name"": ""Customer"", ""type"": ""Transaction"" },
     { ""name"": ""Missing"", ""type"": ""Transaction"" }
   ],
   ""projection"": ""minimal""
-}");
+}")
+                }
+            };
 
-            var message = router.ConvertToolCall("genexus_properties", args);
+            var message = McpRouter.ConvertToolCall(request);
 
             Assert.NotNull(message);
             var routed = JObject.FromObject(message!);
@@ -31,6 +37,11 @@ namespace GxMcp.Gateway.Tests
             Assert.Equal("Customer", targets[0]?["name"]?.ToString());
             Assert.Equal("Transaction", targets[0]?["type"]?.ToString());
             Assert.Equal("Missing", targets[1]?["name"]?.ToString());
+
+            var workerRpc = Program.BuildWorkerRpcRequest(routed, "properties-batch-test");
+            var workerParams = workerRpc["params"] as JObject;
+            Assert.NotNull(workerParams);
+            Assert.True(JToken.DeepEquals(targets, workerParams!["targets"]));
         }
     }
 }

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('MarkFixedPendingRelease', 'CloseAfterRelease')]
     [string]$Action,
@@ -44,6 +44,16 @@ function Assert-ReleaseIssueAction {
             throw "Issue #$IssueNumber lacks '$script:ReleaseIssueLabel'; mark it for the next release instead of closing it directly."
         }
     }
+}
+
+function Test-ReleaseIssuePublicationComment {
+    param(
+        [Parameter(Mandatory = $true)][object]$IssueData,
+        [Parameter(Mandatory = $true)][string]$ReleaseUrl
+    )
+
+    $expected = "Released in $ReleaseUrl"
+    return @($IssueData.comments | Where-Object { [string]$_.body -eq $expected }).Count -gt 0
 }
 
 function Get-GhJson {
@@ -147,6 +157,12 @@ function Invoke-ReleaseIssueWorkflow {
         }
 
         Invoke-ReleaseIssueCommand -Arguments @('issue', 'comment', [string]$issueNumber, '--body', "Released in $ReleaseUrl")
+        if (-not $DryRun) {
+            $commented = Get-ReleaseIssueData -IssueNumber $issueNumber
+            if (-not (Test-ReleaseIssuePublicationComment -IssueData $commented -ReleaseUrl $ReleaseUrl)) {
+                throw "Issue #$issueNumber did not expose the exact release publication comment after posting."
+            }
+        }
         Invoke-ReleaseIssueCommand -Arguments @('issue', 'close', [string]$issueNumber, '--reason', 'completed')
         if (-not $DryRun) {
             $verified = Get-ReleaseIssueData -IssueNumber $issueNumber

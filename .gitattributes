@@ -1,0 +1,17 @@
+# Keep repository text deterministic in LF, matching .editorconfig.
+* text=auto eol=lf
+
+# Never apply text EOL conversion to binary assets.
+*.png -text !eol
+*.jpg -text !eol
+*.jpeg -text !eol
+*.gif -text !eol
+*.ico -text !eol
+*.zip -text !eol
+*.dll -text !eol
+*.exe -text !eol
+*.pdb -text !eol
+
+# Release merge tooling and the existing changelog history intentionally preserve CRLF.
+# Marking it non-text prevents Git's renormalization from creating a noisy full-file diff.
+CHANGELOG.md -text !eol whitespace=cr-at-eol

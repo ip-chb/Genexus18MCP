@@ -24,6 +24,7 @@ namespace GxMcp.Gateway.Tests
     //   #10 apply_pattern on non-eligible type → rejected in <500ms
     //   #17 apply_pattern { validate: true } → real build envelope, requires WWP
     [Trait("Category", "LiveE2E")]
+    [Trait("Category", "ProcessSmoke")]
     public class E2ELiveSmokeTests : IClassFixture<LiveGatewayHarness>, IAsyncLifetime
     {
         // v2.6.9 — share one harness across all tests in the class. Each test

@@ -9,6 +9,7 @@ namespace GxMcp.Gateway.Tests
     // contract. Keep this separate from the broad LiveE2E category so a slow
     // optional scenario cannot hide the result of this release-critical smoke.
     [Trait("Category", "LiveEvents")]
+    [Trait("Category", "ProcessSmoke")]
     public sealed class EventsObjectSaveLiveTests : IClassFixture<LiveGatewayHarness>, IAsyncLifetime
     {
         private readonly LiveGatewayHarness _harness;

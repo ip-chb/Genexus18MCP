@@ -14,6 +14,10 @@ indent_size = 4
 [*.md]
 trim_trailing_whitespace = false
 
+# The release merge contract preserves CRLF for the changelog; all other text uses LF.
+[CHANGELOG.md]
+end_of_line = crlf
+
 [*.{sln}]
 indent_style = tab
 

@@ -23,6 +23,7 @@ namespace GxMcp.Gateway.Tests
     /// Skipped on non-Windows (the script is PowerShell) — same platform gate as the
     /// Worker test suite.
     /// </summary>
+    [Trait("Category", "ProcessSmoke")]
     public class McpSmokeScriptContractTests
     {
         private static bool IsWindows =>
@@ -220,6 +221,14 @@ namespace GxMcp.Gateway.Tests
         // BaseOutputPath (scripts/coverage/collect.ps1 redirects to .test-bin/gateway).
         private static System.Collections.Generic.IEnumerable<string> gatewayExeCandidates(string repoRoot)
         {
+            string configured = Environment.GetEnvironmentVariable("GXMCP_LIVE_GATEWAY_EXE") ?? "";
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                if (!Path.IsPathRooted(configured) || !File.Exists(configured))
+                    throw new InvalidOperationException(
+                        $"GXMCP_LIVE_GATEWAY_EXE must point to an existing absolute executable: {configured}");
+                yield return Path.GetFullPath(configured);
+            }
             yield return Path.Combine(repoRoot, "src", "GxMcp.Gateway", "bin", "Debug", "net10.0-windows", "GxMcp.Gateway.exe");
             yield return Path.Combine(repoRoot, "src", "GxMcp.Gateway", "bin", "Release", "net10.0-windows", "GxMcp.Gateway.exe");
             yield return Path.Combine(repoRoot, ".test-bin", "gateway", "Debug", "net10.0-windows", "GxMcp.Gateway.exe");

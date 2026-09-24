@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Fixed
+
+- Release resume now requires a complete, passed preflight certificate with matching source, SDK, live-gate inputs, artifact fingerprints, exact process-lane evidence, and bounded command identity; timed-out or incomplete phases fail closed.
+- Release publication now verifies the local artifact bytes against GitHub asset digests, binds workflow evidence to the exact tag/event and current assets, rejects draft manual repairs, verifies archive bytes against the manifest, and fails safely on invalid status or issue evidence.
+- Release recovery now rejects forged or stale preflight/publication evidence, binds process-smoke TRX and binaries to the current artifact set, preserves legacy publish.zip-only recovery, verifies npm commit provenance, and recursively redacts nested diagnostics.
+
+### Internal
+
+- Release preflight now runs process-sensitive Gateway and Worker smoke tests in a dedicated serial lane, reconciles the complete VSIX/artifact set for safe `-SkipBuild` retries, resumes incomplete or interrupted publication without duplicate workflows, verifies GitHub Release assets, the peeled tag, workflow completion, and exact npm visibility before closing issues, and exposes atomic publication evidence plus a read-only release doctor. Warning-baseline Markdown is generated from the JSON source of truth, and repository text is LF with an explicit CRLF exception for the changelog.
+- Added a concise AGENTS.md release-resume pointer so autonomous agents can use detached status/doctor evidence before choosing a safe retry.
+
 ## v3.9.0 - 2026-09-23
 
 

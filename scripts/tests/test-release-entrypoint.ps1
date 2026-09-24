@@ -91,6 +91,14 @@ $dirtyGatePosition = $releaseSource.IndexOf('Checking git working tree', [String
 if ($syncPosition -lt 0 -or $dirtyGatePosition -lt 0 -or $syncPosition -gt $dirtyGatePosition) {
     throw 'Canonical release entrypoint must synchronize generated metadata before the dirty-tree gate.'
 }
+$publicationVerifyIndex = $releaseSource.IndexOf('scripts\verify-release-publication.ps1', [StringComparison]::Ordinal)
+$issueCloseIndex = $releaseSource.IndexOf('Close-ReleaseIssues -ReleaseUrl', [StringComparison]::Ordinal)
+if ($publicationVerifyIndex -lt 0 -or $issueCloseIndex -le $publicationVerifyIndex) {
+    throw 'Release issues must close only after publication verification.'
+}
+foreach ($marker in @('publicationState', 'publicationEvidencePath', 'nextAction', 'artifactFingerprint', 'preflightSummaryPath', 'DispatchIfMissing')) {
+    if ($releaseSource -notmatch [regex]::Escape($marker)) { throw "Release publication status marker is missing: $marker" }
+}
 $buildSource = Get-Content -LiteralPath (Join-Path $root 'build.ps1') -Raw
 if ($buildSource -notmatch '\$artifactGxPath\s*=\s*Get-GxPrimaryInstallPath\s+-Catalog\s+\$gxCatalog' -or
     $buildSource -notmatch '\$buildGxPath\s*=\s*\$artifactGxPath' -or
@@ -102,8 +110,20 @@ if ($buildSource -notmatch '\$artifactGxPath\s*=\s*Get-GxPrimaryInstallPath\s+-C
 $releaseSource = Get-Content -LiteralPath (Join-Path $root 'release.ps1') -Raw
 $resumeBuildBlock = [regex]::Match($releaseSource, '(?s)\$canResumeBuild\s*=.*?\n\s*if \(\$canResumeBuild\)').Value
 if ([string]::IsNullOrWhiteSpace($resumeBuildBlock) -or
-    $resumeBuildBlock -notmatch '\$null\s+-ne\s+\$currentArtifactFingerprint' -or
-    $resumeBuildBlock -notmatch 'IsNullOrWhiteSpace\(\[string\]\$priorPreflight\.artifactFingerprint\)') {
+    $releaseSource -notmatch 'Get-GxMcpReleaseArtifactFingerprint' -or
+    $resumeBuildBlock -notmatch 'Test-GxMcpReleasePreflightCompatibility') {
     throw 'Release build resume must fail closed when artifact fingerprints are missing.'
+}
+foreach ($marker in @('Ensure-ReleaseVsixArtifacts', 'nexus-ide.vsix', 'tool_definitions.json', 'Skip-build reuse validated', 'matching preflight inputs', 'Test-ReleasePublicationAlreadyVerified', 'hasCompleteAssetSet', 'remaining issue-closure', 'already closed with this release', 'Verifying existing release manifest', 'Existing publish.zip and checksum reused', 'Reusing existing tag', 'Existing GitHub Release assets reused')) {
+    if ($releaseSource -notmatch [regex]::Escape($marker)) { throw "Release artifact reconciliation is missing: $marker" }
+}
+$resumeManifestGuard = $releaseSource.IndexOf('Step "Verifying existing release manifest"', [StringComparison]::Ordinal)
+$writeManifest = $releaseSource.IndexOf('Step "Writing release manifest"', [StringComparison]::Ordinal)
+$resumeZipGuard = $releaseSource.IndexOf('Existing publish.zip and checksum reused', [StringComparison]::Ordinal)
+$packZip = $releaseSource.IndexOf('publish.zip created', [StringComparison]::Ordinal)
+$resumeTagGuard = $releaseSource.IndexOf('Step "Reusing existing tag $tag"', [StringComparison]::Ordinal)
+$createTag = $releaseSource.IndexOf("Invoke-Cmd 'git' @('tag'", [StringComparison]::Ordinal)
+if ($resumeManifestGuard -lt 0 -or $resumeManifestGuard -gt $writeManifest -or $resumeZipGuard -lt 0 -or $resumeZipGuard -gt $packZip -or $resumeTagGuard -lt 0 -or $resumeTagGuard -gt $createTag) {
+    throw 'Resume guards must precede manifest, zip, and tag mutation paths.'
 }
 Write-Host 'release-entrypoint: wrapper and metadata checks passed' -ForegroundColor Green
