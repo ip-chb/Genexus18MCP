@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## v3.9.0 - 2026-09-23
+
+
+### Tracked issues
+
+- [#284](https://github.com/lennix1337/Genexus18MCP/issues/284) — [Docs] GXMCP_SHARED_CHILD usada no shared-host sem entrada em docs/environment_variables.md
+- [#285](https://github.com/lennix1337/Genexus18MCP/issues/285) — [Bug] shared-host: broker writes the Worker's stdin in the ANSI/OEM code page, so non-ASCII arguments arrive as U+FFFD (accented patch `find` never matches; accented writes at risk)
+- [#286](https://github.com/lennix1337/Genexus18MCP/issues/286) — [Bug] ISO-8601 string arguments are parsed as JSON dates and rejected by schema validation (`since` / `modifiedBefore` unusable)
+- [#287](https://github.com/lennix1337/Genexus18MCP/issues/287) — [Bug] `genexus_analyze mode=callers` never matches `Obj.Call(` / `.Udp(` / `.Submit(` / `.Link(`, so every lookup ends as `CallerSitesUnconfirmed`
+- [#288](https://github.com/lennix1337/Genexus18MCP/issues/288) — [Bug] Worker still writes build logs, job state and rotated logs under its install directory (npx cache)
+- [#289](https://github.com/lennix1337/Genexus18MCP/issues/289) — [Perf] Every successful write echoes the whole persisted part (`result.source`): ~35 KB median response for a ~115-char patch
+- [#290](https://github.com/lennix1337/Genexus18MCP/issues/290) — [Perf] Exact-identity reads are blocked until the index is `freshness=current`, causing multi-minute stalls at session start on large KBs
+- [#291](https://github.com/lennix1337/Genexus18MCP/issues/291) — [Design] One operation model for long lifecycle actions: honor `wait_until_done` on `specify`, queue instead of `BuildAlreadyRunning`, delta status, single id namespace
+- [#292](https://github.com/lennix1337/Genexus18MCP/issues/292) — [Perf] Source search: persisted source is capped at 8 MiB, so unscoped `search_source` falls back to an SDK scan (~13 objects/s) and times out at 1-2% coverage
+- [#293](https://github.com/lennix1337/Genexus18MCP/issues/293) — [Design] STA scheduler: priorities, cooperative slicing and bounded waits instead of instant `WorkerBusy` (critical for shared-host)
+- [#294](https://github.com/lennix1337/Genexus18MCP/issues/294) — [Ops] Run the Gateway/Worker from a staged, versioned runtime instead of the npx cache (upgrade `EBUSY` → `CONNECTION_CLOSED`)
+- [#295](https://github.com/lennix1337/Genexus18MCP/issues/295) — [DX] Contract papercuts: batch `properties get`, typed `PartNotFound` listing Rules, missing near-match diagnostics on `NoMatch`
+- [#296](https://github.com/lennix1337/Genexus18MCP/issues/296) — [Perf] Default tool surface costs ~134 KB of schema per session: lean default profile and per-profile budgets
+- [#297](https://github.com/lennix1337/Genexus18MCP/issues/297) — [Tracking] Field review of the end-to-end MCP flow: bottlenecks found and suggested order of work (#285-#296)
+- [#298](https://github.com/lennix1337/Genexus18MCP/issues/298) — genexus_io import_part part=Variables silently strips the module qualifier from SDT variables, and reports WriteNotPersisted while saving
+- [#299](https://github.com/lennix1337/Genexus18MCP/issues/299) — [Docs] Document shared Worker driver and provider environment variables
+- [#301](https://github.com/lennix1337/Genexus18MCP/issues/301) — [Bug] import_part reports WriteNotPersisted when the only difference is CRLF vs LF — isolates the unexplained transformation in #265
+- [#302](https://github.com/lennix1337/Genexus18MCP/issues/302) — [Bug/DX] genexus_search_source silently ignores an unknown argument instead of rejecting it, turning a scoped search into a full-KB scan
+- [#303](https://github.com/lennix1337/Genexus18MCP/issues/303) — [Regression of #225] KB_LEASE_EXPIRED still hits genexus_lifecycle mid-session on 3.8.0 / GeneXus 18
+
+
 ### Added
 
 - Run the Gateway and Worker from a staged, versioned runtime directory (`%LOCALAPPDATA%\GenexusMCP\runtimes\<version>\`) instead of executing directly inside the npm cache, preventing `EBUSY` file locking errors during npm/npx upgrades. Added runtime staging manager, manifest integrity verification, automated cleanup of stale version folders, and doctor diagnostics for runtime classification. ([#294](https://github.com/lennix1337/Genexus18MCP/issues/294), [#297](https://github.com/lennix1337/Genexus18MCP/issues/297))
@@ -21,8 +47,8 @@
 - Caller analysis now recognizes qualified GeneXus member calls and legacy `Call`/`Udp`/`Submit`/`Link` forms while rejecting variable and near-name matches. ([#287](https://github.com/lennix1337/Genexus18MCP/issues/287))
 - Worker runtime files now use operational-key-scoped state, log, and temp roots outside the install directory; build log paths remain available and logger rotation stays beside the active log. ([#288](https://github.com/lennix1337/Genexus18MCP/issues/288))
 - Mutation responses omit full persisted `source`/`content` by default and report omitted paths in MCP `_meta.omittedFields`; `includePersistedText=true` restores the full text. Oversized `post_state.diff` is bounded to 40 lines and marked `diffTruncated`. Variable add/modify returns changed declarations and the persisted count instead of the Variables list. ([#289](https://github.com/lennix1337/Genexus18MCP/issues/289))
-- `genexus_properties action=get` supports ordered batches of up to 100 targets with per-object errors; unknown read parts return `PartNotFound` with resolvable part names and a signature-inspection hint, and shorthand patch `NoMatch` responses retain near-match diagnostics. ([#295](https://github.com/lennix1337/Genexus18MCP/issues/295))
-- Variable imports now preserve module-qualified SDT types through persistence, and modify previews resolve the `typeName` alias when `newTypeName` is omitted. ([#298](https://github.com/lennix1337/Genexus18MCP/issues/298))
+- `genexus_properties action=get` supports ordered batches of up to 100 targets with per-object errors; the Gateway forwards `targets[]` to the Worker so each result keeps its input order, and unknown read parts return `PartNotFound` with resolvable part names and a signature-inspection hint, while shorthand patch `NoMatch` responses retain near-match diagnostics. ([#295](https://github.com/lennix1337/Genexus18MCP/issues/295))
+- Variable imports now preserve module-qualified SDT types through persistence and tolerate harmless SDK datatype-casing normalization during verification, while modify previews resolve the `typeName` alias when `newTypeName` is omitted. ([#298](https://github.com/lennix1337/Genexus18MCP/issues/298))
 - The generated operation inventory records Gateway journal/reload policies and variants; `--check` detects published-artifact drift and cross-validates `journal_status`, both `journal_repair` modes, `recover`, and `worker_reload` against `OperationClassifier`. Schema v1 remains compatible because variants are additive; a generic C#-driven projection and other argument-dependent actions remain follow-up work. ([#283](https://github.com/lennix1337/Genexus18MCP/issues/283))
 - Exact-identity `genexus_read`, `genexus_inspect`, and object-view `genexus_navigation` calls, plus objectName-scoped `genexus_search_source`, run during index refresh and report stale index state in `_meta.index`; query/list and broad source searches remain gated. ([#290](https://github.com/lennix1337/Genexus18MCP/issues/290))
 - `genexus_io action=import_part` and write persistence verification treat identical text with differing line endings (CRLF vs LF) as verified normalization across all code and text routes, suppressing false `WriteNotPersisted`, `partialPersistenceDetected`, and spurious `firstDifferentLine` diff reports. ([#301](https://github.com/lennix1337/Genexus18MCP/issues/301))
@@ -41,7 +67,7 @@
 ### Tracked issues
 
 - [#260](https://github.com/lennix1337/Genexus18MCP/issues/260) — Support K2BTools patterns, not only WorkWithPlus: generic PatternInstance read, edit and apply
-- [#272](https://github.com/lennix1337/Genexus18MCP/issues/272) — [Docs] AGENTS.md cita TransportMode no modo isolado; schema v2 exige GatewayMode e rejeita Server.TransportMode
+- [#272](https://github.com/lennix1337/Genexus18MCP/issues/272) — [Docs] AGENTS.md cita TransportMode no modo isolado; schema v2 exige GatewayMode e rejeita Server.TransportMode
 - [#274](https://github.com/lennix1337/Genexus18MCP/issues/274) — fix(module): contextualize null SDK install failure and verify dependency installation
 - [#276](https://github.com/lennix1337/Genexus18MCP/issues/276) — PostgreSQL: records_query sugere dataStoreAlias, mas aliases são restritos a SQL Server
 - [#280](https://github.com/lennix1337/Genexus18MCP/issues/280) — import_part ignores dryRun:true and performs a real write
@@ -94,7 +120,7 @@
 - [#265](https://github.com/lennix1337/Genexus18MCP/issues/265) — Full Source save verification can contradict an exact public reread and misreport saved=false
 - [#266](https://github.com/lennix1337/Genexus18MCP/issues/266) — [Perf] Large KBs fully re-index in most new sessions: slot flushes drop the delta sidecar and interrupted rebuilds restart from zero
 - [#270](https://github.com/lennix1337/Genexus18MCP/issues/270) — genexus_create action=object_atomic rejects a valid payload with "Required field 'action' is missing"
-- [#271](https://github.com/lennix1337/Genexus18MCP/issues/271) — [Bug] McpSmokeScript_Succeeds_AgainstLiveGateway: falha possivelmente intermitente no lote paralelo do release-preflight (Windows)
+- [#271](https://github.com/lennix1337/Genexus18MCP/issues/271) — [Bug] McpSmokeScript_Succeeds_AgainstLiveGateway: falha possivelmente intermitente no lote paralelo do release-preflight (Windows)
 - [#273](https://github.com/lennix1337/Genexus18MCP/issues/273) — [Bug] changed_objects: CHANGED pós-freeze por token de concorrência, não por conteúdo (vs IDE Compare)
 
 

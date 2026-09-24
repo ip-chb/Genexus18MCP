@@ -1,8 +1,13 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-18",
-  "warningCount": 218,
+  "generatedAt": "2026-09-23",
+  "warningCount": 199,
   "warnings": [
+    {
+      "code": "CS1668",
+      "file": "<global>",
+      "line": 0
+    },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway.Tests/CreateIndexRoutingTests.cs",
@@ -57,71 +62,6 @@
       "code": "CS8600",
       "file": "src/GxMcp.Gateway.Tests/EnvCacheTtlTests.cs",
       "line": 74
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 17
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 18
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 29
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 30
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 41
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 42
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 43
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 53
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 54
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 55
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 56
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 64
-    },
-    {
-      "code": "CS8600",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 65
     },
     {
       "code": "CS8600",
@@ -251,7 +191,7 @@
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/LifecycleResponseShaper.cs",
-      "line": 243
+      "line": 247
     },
     {
       "code": "CS8600",
@@ -286,87 +226,87 @@
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1926
+      "line": 1941
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1981
+      "line": 2018
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 2005
+      "line": 2042
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 79
+      "line": 130
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 87
+      "line": 138
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 88
+      "line": 139
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 710
+      "line": 782
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 739
+      "line": 811
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 744
+      "line": 816
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 806
+      "line": 878
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 807
+      "line": 879
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 836
+      "line": 908
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 837
+      "line": 909
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 838
+      "line": 910
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 847
+      "line": 919
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 848
+      "line": 920
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 861
+      "line": 933
     },
     {
       "code": "CS8600",
@@ -391,92 +331,92 @@
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 164
+      "line": 166
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 288
+      "line": 667
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 302
+      "line": 669
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 303
+      "line": 699
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 320
+      "line": 700
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 335
+      "line": 705
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 587
+      "line": 707
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1075
+      "line": 729
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1077
+      "line": 734
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1107
+      "line": 737
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1108
+      "line": 839
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1113
+      "line": 853
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1115
+      "line": 854
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1137
+      "line": 871
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1142
+      "line": 886
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 1145
+      "line": 1157
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.WorkerLifecycle.cs",
-      "line": 327
+      "line": 325
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Program.WorkerLifecycle.cs",
-      "line": 505
+      "line": 503
     },
     {
       "code": "CS8600",
@@ -521,17 +461,17 @@
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Routers/OperationsRouter.cs",
-      "line": 136
+      "line": 139
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Routers/OperationsRouter.cs",
-      "line": 150
+      "line": 153
     },
     {
       "code": "CS8600",
       "file": "src/GxMcp.Gateway/Routers/OperationsRouter.cs",
-      "line": 181
+      "line": 184
     },
     {
       "code": "CS8600",
@@ -611,27 +551,27 @@
     {
       "code": "CS8602",
       "file": "src/GxMcp.Gateway.Tests/RouterContractCoverageTests.cs",
-      "line": 381
+      "line": 405
     },
     {
       "code": "CS8602",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1798
+      "line": 1813
     },
     {
       "code": "CS8602",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1872
+      "line": 1887
     },
     {
       "code": "CS8602",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1929
+      "line": 1944
     },
     {
       "code": "CS8602",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 318
+      "line": 869
     },
     {
       "code": "CS8603",
@@ -641,42 +581,42 @@
     {
       "code": "CS8603",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 318
+      "line": 338
     },
     {
       "code": "CS8603",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1900
+      "line": 1915
     },
     {
       "code": "CS8603",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1919
+      "line": 1934
     },
     {
       "code": "CS8603",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1920
+      "line": 1935
     },
     {
       "code": "CS8603",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 1921
+      "line": 1936
     },
     {
       "code": "CS8603",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 2004
+      "line": 2041
     },
     {
       "code": "CS8603",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 2089
+      "line": 2126
     },
     {
       "code": "CS8603",
       "file": "src/GxMcp.Gateway/Program.Whoami.cs",
-      "line": 1770
+      "line": 1952
     },
     {
       "code": "CS8603",
@@ -705,33 +645,8 @@
     },
     {
       "code": "CS8604",
-      "file": "src/GxMcp.Gateway.Tests/EditVerificationRoutingTests.cs",
-      "line": 26
-    },
-    {
-      "code": "CS8604",
-      "file": "src/GxMcp.Gateway.Tests/EditVerificationRoutingTests.cs",
-      "line": 39
-    },
-    {
-      "code": "CS8604",
-      "file": "src/GxMcp.Gateway.Tests/EditVerificationRoutingTests.cs",
-      "line": 64
-    },
-    {
-      "code": "CS8604",
       "file": "src/GxMcp.Gateway.Tests/FullEditConcurrencyRoutingTests.cs",
       "line": 12
-    },
-    {
-      "code": "CS8604",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 12
-    },
-    {
-      "code": "CS8604",
-      "file": "src/GxMcp.Gateway.Tests/Issue58To62RoutingTests.cs",
-      "line": 31
     },
     {
       "code": "CS8604",
@@ -811,107 +726,97 @@
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 81
+      "line": 132
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 90
+      "line": 141
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.GatewayTools.cs",
-      "line": 559
+      "line": 625
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.LifecycleGateway.cs",
-      "line": 419
+      "line": 437
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 328
+      "line": 533
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 339
+      "line": 879
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 352
+      "line": 890
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 357
+      "line": 903
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 368
+      "line": 908
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 401
+      "line": 971
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 608
+      "line": 1178
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 737
-    },
-    {
-      "code": "CS8604",
-      "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 943
-    },
-    {
-      "code": "CS8604",
-      "file": "src/GxMcp.Gateway/Program.ToolDispatch.cs",
-      "line": 955
+      "line": 1259
     },
     {
       "code": "CS8604",
       "file": "src/GxMcp.Gateway/Program.WorkerLifecycle.cs",
-      "line": 338
+      "line": 336
     },
     {
       "code": "CS8605",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 240
+      "line": 260
     },
     {
       "code": "CS8605",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 241
+      "line": 261
     },
     {
       "code": "CS8605",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 242
+      "line": 262
     },
     {
       "code": "CS8605",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 251
+      "line": 271
     },
     {
       "code": "CS8605",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 252
+      "line": 272
     },
     {
       "code": "CS8605",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 253
+      "line": 273
     },
     {
       "code": "CS8618",
@@ -941,7 +846,7 @@
     {
       "code": "CS8619",
       "file": "src/GxMcp.Gateway/McpRouter.cs",
-      "line": 504
+      "line": 519
     },
     {
       "code": "CS8620",
@@ -1031,22 +936,22 @@
     {
       "code": "CS8620",
       "file": "src/GxMcp.Gateway.Tests/GatewayArgsValidatorTests.cs",
-      "line": 131
+      "line": 137
     },
     {
       "code": "CS8620",
       "file": "src/GxMcp.Gateway.Tests/GatewayArgsValidatorTests.cs",
-      "line": 145
+      "line": 151
     },
     {
       "code": "CS8620",
       "file": "src/GxMcp.Gateway.Tests/GatewayArgsValidatorTests.cs",
-      "line": 201
+      "line": 207
     },
     {
       "code": "CS8620",
       "file": "src/GxMcp.Gateway.Tests/GatewayArgsValidatorTests.cs",
-      "line": 217
+      "line": 223
     },
     {
       "code": "CS8620",
@@ -1081,12 +986,12 @@
     {
       "code": "CS8625",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 253
+      "line": 273
     },
     {
       "code": "CS8625",
       "file": "src/GxMcp.Gateway.Tests/WhoamiPlaybooksTests.cs",
-      "line": 307
+      "line": 327
     },
     {
       "code": "CS8625",

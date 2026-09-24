@@ -653,8 +653,15 @@ namespace GxMcp.Worker.Services
             {
                 return new PersistedVerificationResult { State = "verified", Reason = "none", Matches = true };
             }
-            string mode = verifyMode != null ? verifyMode : TextPersistenceVerifier.ResolveMode(null, partName);
-            bool exact = string.Equals(mode, "exact", StringComparison.OrdinalIgnoreCase);
+            // An omitted verifyMode keeps the legacy, SDK-tolerant behavior. Only an
+            // explicit exact mode opts into strict byte-level verification; otherwise
+            // Variables (and other rendered parts) must tolerate harmless SDK casing,
+            // whitespace, and line-ending normalization.
+            bool explicitMode = verifyMode != null;
+            string mode = explicitMode
+                ? TextPersistenceVerifier.ResolveMode(verifyMode, partName)
+                : "normalized";
+            bool exact = explicitMode && string.Equals(mode, "exact", StringComparison.OrdinalIgnoreCase);
 
             bool eolOnly = string.Equals(
                 (requested ?? "").Replace("\r\n", "\n").Replace('\r', '\n'),

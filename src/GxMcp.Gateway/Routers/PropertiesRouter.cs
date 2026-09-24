@@ -83,6 +83,7 @@ namespace GxMcp.Gateway.Routers
                 module = "Property",
                 action = "Get",
                 target = args?["name"]?.ToString(),
+                targets = args?["targets"] as JArray,
                 control = args?["control"]?.ToString(),
                 type = args?["type"]?.ToString(),
                 propertyName = propNameToken?.ToString(),

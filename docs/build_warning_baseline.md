@@ -1,6 +1,6 @@
 # Release build warning baseline
 
-Captured on 2026-09-18 after the release warning baseline refresh.
+Captured on 2026-09-23 after the release warning baseline refresh.
 
 ## Measurement
 
@@ -15,19 +15,21 @@ $env:GX_PATH = 'C:\Program Files (x86)\GeneXus\GeneXus18'
 
 The build completed successfully (`exit code 0`). It emitted 448 compiler/analyzer
 warning lines. The solution graph repeats some diagnostics, so the actionable
-baseline is 218 distinct `(code, file, line)` locations. The checker also
+baseline is 199 distinct `(code, file, line)` locations. The checker also
 reports line-only moves separately, so source reorganization does not look like
 a newly introduced diagnostic:
 
-| Project | CS8600 | CS8602 | CS8603 | CS8604 | CS8605 | CS8618 | CS8620 | CS8625 | Total |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `GxMcp.Gateway` | 59 | 4 | 9 | 16 | 0 | 5 | 1 | 1 | 96 |
-| `GxMcp.Gateway.Tests` | 48 | 15 | 2 | 23 | 6 | 0 | 21 | 7 | 122 |
-| **Total** | **107** | **19** | **11** | **39** | **6** | **5** | **22** | **8** | **218** |
+| Project | CS8600 | CS8602 | CS8603 | CS8604 | CS8605 | CS8618 | CS8620 | CS8625 | Other | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `GxMcp.Gateway` | 59 | 4 | 9 | 14 | 0 | 5 | 1 | 1 | 1 | 94 |
+| `GxMcp.Gateway.Tests` | 35 | 15 | 2 | 18 | 6 | 0 | 21 | 7 | 0 | 104 |
+| **Global** | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 |
+| **Total** | **94** | **19** | **11** | **32** | **6** | **5** | **22** | **8** | **2** | **199** |
 
 `MSB3277` is not emitted. The two xUnit1012 diagnostics reported by the issue
 are not emitted, and the benchmark initialization warnings in
-`SearchRankParallelismBenchmark.cs` are not emitted.
+`SearchRankParallelismBenchmark.cs` are not emitted. The two diagnostics counted
+under **Other** are one `CS8619` from `GxMcp.Gateway` and one global `CS1668`.
 
 ## Policy
 

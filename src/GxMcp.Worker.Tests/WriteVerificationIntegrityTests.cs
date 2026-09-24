@@ -36,6 +36,26 @@ namespace GxMcp.Worker.Tests
         }
 
         [Fact]
+        public void DefaultVariablesVerification_AcceptsSdkTypeCasingNormalization()
+        {
+            const string requested = "&GridState : CustomerSdt, General\r\n&PlainLength : Character(25)";
+            const string persisted = "&GridState : CustomerSdt, General\r\n&PlainLength : CHARACTER(25)";
+
+            var tolerant = WriteService.EvaluatePersistedVerification(
+                requested, persisted, readTruncated: false, readFailure: null,
+                verifyMode: null, partName: "Variables");
+            var strict = WriteService.EvaluatePersistedVerification(
+                requested, persisted, readTruncated: false, readFailure: null,
+                verifyMode: "exact", partName: "Variables");
+
+            Assert.True(tolerant.Matches);
+            Assert.Equal("verified", tolerant.State);
+            Assert.Equal("normalization", tolerant.Reason);
+            Assert.False(strict.Matches);
+            Assert.Equal("mismatch", strict.State);
+        }
+
+        [Fact]
         public void XmlAttributeOrder_IsReportedAsNormalization()
         {
             var result = WriteService.EvaluatePersistedVerification(
